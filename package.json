@@ -1,0 +1,38 @@
+{
+  "name": "village-defender",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A PixiJS + TypeScript survival defense game built as a professional web game portfolio project.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "npm run typecheck && vite build",
+    "deploy": "npm run build && gh-pages -d dist",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings=0",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "pixijs",
+    "typescript",
+    "vite",
+    "game",
+    "portfolio"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "pixi.js": "^8.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "gh-pages": "^6.1.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.0.0",
+    "vite": "^8.1.3"
+  }
+}
