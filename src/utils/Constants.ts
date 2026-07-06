@@ -19,7 +19,13 @@ export const INPUT_CONFIG = {
 } as const;
 
 export const UI_CONFIG = {
+  buttonHeight: 48,
+  buttonRadius: 8,
+  buttonWidth: 180,
   fontFamily: 'Inter, Arial, sans-serif',
+  hudPadding: 24,
+  healthBarHeight: 14,
+  healthBarWidth: 180,
   largeFontSize: 54,
   mediumFontSize: 30,
   smallFontSize: 20,

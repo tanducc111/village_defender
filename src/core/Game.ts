@@ -32,6 +32,7 @@ export class Game {
   private currentScene: Scene | null = null;
   private gameState = GameState.Booting;
   private inputManager: InputManager | null = null;
+  private overlayScene: Scene | null = null;
 
   public constructor(private readonly hostElement: HTMLElement) {}
 
@@ -62,6 +63,7 @@ export class Game {
   /** Releases scene, input, event, and PixiJS resources. */
   public destroy(): void {
     this.app.ticker.remove(this.update);
+    this.destroyOverlayScene();
     if (this.currentScene !== null) {
       this.currentScene.exit();
       this.app.stage.removeChild(this.currentScene.container);
@@ -78,6 +80,11 @@ export class Game {
       ticker.deltaMS / TIME.millisecondsPerSecond,
       GAME_CONFIG.maxDeltaSeconds,
     );
+
+    if (this.gameState === GameState.Paused) {
+      this.overlayScene?.update(deltaSeconds);
+      return;
+    }
 
     this.currentScene?.update(deltaSeconds);
     this.camera.update(deltaSeconds);
@@ -108,12 +115,12 @@ export class Game {
 
   private handlePauseRequested(): void {
     if (this.gameState === GameState.Playing) {
-      void this.setScene(SceneId.Pause);
+      void this.openPauseOverlay();
       return;
     }
 
     if (this.gameState === GameState.Paused) {
-      void this.setScene(SceneId.Play);
+      this.closePauseOverlay();
     }
   }
 
@@ -124,8 +131,13 @@ export class Game {
       throw new Error(`Scene is not registered: ${sceneId}`);
     }
 
-    this.currentScene?.exit();
-    this.currentScene?.destroy();
+    this.destroyOverlayScene();
+
+    if (this.currentScene !== null) {
+      this.currentScene.exit();
+      this.app.stage.removeChild(this.currentScene.container);
+      this.currentScene.destroy();
+    }
     this.camera.reset();
     this.camera.setTarget(null);
 
@@ -137,6 +149,43 @@ export class Game {
     await nextScene.enter(data);
 
     this.eventBus.emit('sceneChanged', { sceneId });
+  }
+
+  private async openPauseOverlay(): Promise<void> {
+    if (this.overlayScene !== null) {
+      return;
+    }
+
+    const pauseSceneFactory = this.sceneFactories.get(SceneId.Pause);
+
+    if (pauseSceneFactory === undefined) {
+      throw new Error(`Scene is not registered: ${SceneId.Pause}`);
+    }
+
+    const pauseScene = pauseSceneFactory(this.createSceneServices());
+    this.overlayScene = pauseScene;
+    this.gameState = GameState.Paused;
+    this.app.stage.addChild(pauseScene.container);
+    this.eventBus.emit('pauseChanged', { paused: true });
+
+    await pauseScene.enter();
+  }
+
+  private closePauseOverlay(): void {
+    this.destroyOverlayScene();
+    this.gameState = GameState.Playing;
+    this.eventBus.emit('pauseChanged', { paused: false });
+  }
+
+  private destroyOverlayScene(): void {
+    if (this.overlayScene === null) {
+      return;
+    }
+
+    this.overlayScene.exit();
+    this.app.stage.removeChild(this.overlayScene.container);
+    this.overlayScene.destroy();
+    this.overlayScene = null;
   }
 
   private createSceneServices(): SceneServices {

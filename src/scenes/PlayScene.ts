@@ -11,6 +11,7 @@ import { PoolSystem } from '../systems/PoolSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import type { Vector2 } from '../types/GameTypes';
+import { HUD } from '../ui/HUD';
 import {
   ARROW_CONFIG,
   CAMERA_CONFIG,
@@ -31,6 +32,7 @@ export class PlayScene extends Scene {
   private arrowPool: PoolSystem<Arrow> | null = null;
   private enemyPool: PoolSystem<Enemy> | null = null;
   private house: House | null = null;
+  private hud: HUD | null = null;
   private player: Player | null = null;
   private scoreSystem: ScoreSystem | null = null;
   private spawnSystem: SpawnSystem | null = null;
@@ -61,6 +63,7 @@ export class PlayScene extends Scene {
       (enemy) => entityLayer.addChild(enemy),
     );
     this.animationSystem = new AnimationSystem(effectLayer);
+    this.hud = new HUD(this.services.eventBus);
     this.scoreSystem = new ScoreSystem(this.services.eventBus);
     this.spawnSystem = new SpawnSystem(this.enemyPool, () => this.services.app.screen);
 
@@ -75,6 +78,7 @@ export class PlayScene extends Scene {
     this.house.resetHealth();
 
     entityLayer.addChild(this.house, this.player);
+    this.container.addChild(this.hud);
     this.scoreSystem.reset();
     this.emitHouseHealth();
 
@@ -107,6 +111,7 @@ export class PlayScene extends Scene {
     this.unsubscribers.forEach((unsubscribe) => unsubscribe());
     this.unsubscribers.length = 0;
     this.animationSystem?.clear();
+    this.hud?.dispose();
     this.services.camera.setTarget(null);
   }
 
@@ -181,6 +186,11 @@ export class PlayScene extends Scene {
     this.enemyPool.release(enemy);
     this.house.takeDamage(HOUSE_CONFIG.damagePerEnemy);
     this.animationSystem?.spawnHit(position);
+    this.services.eventBus.emit('houseDamaged', {
+      health: this.house.getHealth(),
+      maxHealth: this.house.getMaxHealth(),
+      position,
+    });
     this.emitHouseHealth();
     this.requestCameraShake();
 

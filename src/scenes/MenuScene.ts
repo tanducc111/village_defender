@@ -2,6 +2,7 @@ import { Graphics, Text } from 'pixi.js';
 
 import { Scene } from '../core/Scene';
 import { SceneId } from '../types/GameTypes';
+import { Button } from '../ui/Button';
 import { SCENE_CONFIG, UI_CONFIG } from '../utils/Constants';
 
 /**
@@ -41,24 +42,15 @@ export class MenuScene extends Scene {
     subtitle.anchor.set(0.5);
     subtitle.position.set(width / 2, height / 2);
 
-    const startText = new Text({
-      style: {
-        fill: 0xffd166,
-        fontFamily: UI_CONFIG.fontFamily,
-        fontSize: UI_CONFIG.mediumFontSize,
-        fontWeight: '700',
+    const startButton = new Button({
+      label: 'Start Game',
+      onClick: () => {
+        void this.services.setScene(SceneId.Play);
       },
-      text: 'Start Game',
     });
-    startText.anchor.set(0.5);
-    startText.cursor = 'pointer';
-    startText.eventMode = 'static';
-    startText.position.set(width / 2, height / 2 + SCENE_CONFIG.menuSubtitleOffsetY);
-    startText.on('pointertap', () => {
-      void this.services.setScene(SceneId.Play);
-    });
+    startButton.position.set(width / 2, height / 2 + SCENE_CONFIG.menuSubtitleOffsetY);
 
-    this.container.addChild(background, title, subtitle, startText);
+    this.container.addChild(background, title, subtitle, startButton);
   }
 
   /** Menu has no continuous simulation yet. */

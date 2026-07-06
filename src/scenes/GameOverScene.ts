@@ -2,6 +2,7 @@ import { Graphics, Text } from 'pixi.js';
 
 import { Scene } from '../core/Scene';
 import { SceneId, type SceneData } from '../types/GameTypes';
+import { Button } from '../ui/Button';
 import { UI_CONFIG } from '../utils/Constants';
 
 /**
@@ -41,24 +42,15 @@ export class GameOverScene extends Scene {
     scoreText.anchor.set(0.5);
     scoreText.position.set(width / 2, height / 2 - 24);
 
-    const restartText = new Text({
-      style: {
-        fill: 0xffd166,
-        fontFamily: UI_CONFIG.fontFamily,
-        fontSize: UI_CONFIG.mediumFontSize,
-        fontWeight: '700',
+    const restartButton = new Button({
+      label: 'Restart',
+      onClick: () => {
+        void this.services.setScene(SceneId.Play);
       },
-      text: 'Restart',
     });
-    restartText.anchor.set(0.5);
-    restartText.cursor = 'pointer';
-    restartText.eventMode = 'static';
-    restartText.position.set(width / 2, height / 2 + 72);
-    restartText.on('pointertap', () => {
-      void this.services.setScene(SceneId.Play);
-    });
+    restartButton.position.set(width / 2, height / 2 + 72);
 
-    this.container.addChild(background, title, scoreText, restartText);
+    this.container.addChild(background, title, scoreText, restartButton);
   }
 
   /** Game over scene has no simulation. */

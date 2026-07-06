@@ -2,6 +2,7 @@ import { Graphics, Text } from 'pixi.js';
 
 import { Scene } from '../core/Scene';
 import { SceneId } from '../types/GameTypes';
+import { Button } from '../ui/Button';
 import { UI_CONFIG } from '../utils/Constants';
 
 /**
@@ -14,7 +15,7 @@ export class PauseScene extends Scene {
 
     const background = new Graphics()
       .rect(0, 0, width, height)
-      .fill({ color: 0x111827 });
+      .fill({ color: 0x111827, alpha: 0.82 });
 
     const title = new Text({
       style: {
@@ -28,24 +29,23 @@ export class PauseScene extends Scene {
     title.anchor.set(0.5);
     title.position.set(width / 2, height / 2 - 48);
 
-    const resumeText = new Text({
-      style: {
-        fill: 0xffd166,
-        fontFamily: UI_CONFIG.fontFamily,
-        fontSize: UI_CONFIG.mediumFontSize,
-        fontWeight: '700',
+    const resumeButton = new Button({
+      label: 'Resume',
+      onClick: () => {
+        this.services.eventBus.emit('pauseRequested', undefined);
       },
-      text: 'Resume',
     });
-    resumeText.anchor.set(0.5);
-    resumeText.cursor = 'pointer';
-    resumeText.eventMode = 'static';
-    resumeText.position.set(width / 2, height / 2 + 42);
-    resumeText.on('pointertap', () => {
-      void this.services.setScene(SceneId.Play);
-    });
+    resumeButton.position.set(width / 2, height / 2 + 36);
 
-    this.container.addChild(background, title, resumeText);
+    const restartButton = new Button({
+      label: 'Restart',
+      onClick: () => {
+        void this.services.setScene(SceneId.Play);
+      },
+    });
+    restartButton.position.set(width / 2, height / 2 + 96);
+
+    this.container.addChild(background, title, resumeButton, restartButton);
   }
 
   /** Pause scene has no simulation. */
