@@ -5,6 +5,7 @@ import { LoadingScene } from '../scenes/LoadingScene';
 import { MenuScene } from '../scenes/MenuScene';
 import { PauseScene } from '../scenes/PauseScene';
 import { PlayScene } from '../scenes/PlayScene';
+import { GameOverScene } from '../scenes/GameOverScene';
 import type { SceneData } from '../types/GameTypes';
 import { GameState, SceneId } from '../types/GameTypes';
 import type { SceneServices } from '../types/SceneServices';
@@ -61,8 +62,11 @@ export class Game {
   /** Releases scene, input, event, and PixiJS resources. */
   public destroy(): void {
     this.app.ticker.remove(this.update);
-    this.currentScene?.exit();
-    this.currentScene?.destroy();
+    if (this.currentScene !== null) {
+      this.currentScene.exit();
+      this.app.stage.removeChild(this.currentScene.container);
+      this.currentScene.destroy();
+    }
     this.inputManager?.destroy();
     this.unsubscribers.forEach((unsubscribe) => unsubscribe());
     this.eventBus.clear();
@@ -84,6 +88,7 @@ export class Game {
     this.sceneFactories.set(SceneId.Menu, (services) => new MenuScene(services));
     this.sceneFactories.set(SceneId.Play, (services) => new PlayScene(services));
     this.sceneFactories.set(SceneId.Pause, (services) => new PauseScene(services));
+    this.sceneFactories.set(SceneId.GameOver, (services) => new GameOverScene(services));
   }
 
   private registerEventHandlers(): void {
@@ -94,6 +99,9 @@ export class Game {
       }),
       this.eventBus.on('cameraShakeRequested', ({ intensity, durationSeconds }) => {
         this.camera.shake(intensity, durationSeconds);
+      }),
+      this.eventBus.on('gameOver', ({ finalScore }) => {
+        void this.setScene(SceneId.GameOver, { finalScore });
       }),
     );
   }
@@ -153,11 +161,13 @@ export class Game {
   private setGameStateForScene(sceneId: SceneId): void {
     if (sceneId === SceneId.Menu) {
       this.gameState = GameState.Menu;
+      this.eventBus.emit('pauseChanged', { paused: false });
       return;
     }
 
     if (sceneId === SceneId.Play) {
       this.gameState = GameState.Playing;
+      this.eventBus.emit('pauseChanged', { paused: false });
       return;
     }
 
@@ -169,6 +179,7 @@ export class Game {
 
     if (sceneId === SceneId.GameOver) {
       this.gameState = GameState.GameOver;
+      this.eventBus.emit('pauseChanged', { paused: false });
       return;
     }
 

@@ -18,9 +18,7 @@ export abstract class Scene {
   public abstract update(deltaSeconds: number): void;
 
   /** Called before the scene is removed from the PixiJS stage. */
-  public exit(): void {
-    this.container.removeChildren();
-  }
+  public exit(): void {}
 
   /** Releases PixiJS display objects owned by this scene. */
   public destroy(): void {

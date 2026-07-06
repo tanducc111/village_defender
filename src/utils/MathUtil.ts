@@ -18,3 +18,25 @@ export function distanceBetween(first: Vector2, second: Vector2): number {
 export function randomRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
+
+/** Returns a normalized vector, using the fallback when the input has no length. */
+export function normalizeVector(vector: Vector2, fallback: Vector2 = { x: 1, y: 0 }): Vector2 {
+  const length = Math.hypot(vector.x, vector.y);
+
+  if (length === 0) {
+    return fallback;
+  }
+
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+  };
+}
+
+/** Returns the unit direction from one point to another. */
+export function directionBetween(from: Vector2, to: Vector2): Vector2 {
+  return normalizeVector({
+    x: to.x - from.x,
+    y: to.y - from.y,
+  });
+}

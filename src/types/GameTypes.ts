@@ -20,6 +20,12 @@ export enum GameState {
   GameOver = 'game-over',
 }
 
+/** Side of the arena where an enemy enters the play field. */
+export enum SpawnSide {
+  Left = 'left',
+  Right = 'right',
+}
+
 /** Immutable two-dimensional coordinate used by input, movement, and effects. */
 export interface Vector2 {
   readonly x: number;

@@ -1,61 +1,226 @@
-import { Graphics, Text } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 
 import { Scene } from '../core/Scene';
-import { SCENE_CONFIG, UI_CONFIG } from '../utils/Constants';
+import { Arrow } from '../entities/Arrow';
+import { Enemy } from '../entities/Enemy';
+import { House } from '../entities/House';
+import { Player } from '../entities/Player';
+import { AnimationSystem } from '../systems/AnimationSystem';
+import { CollisionSystem } from '../systems/CollisionSystem';
+import { PoolSystem } from '../systems/PoolSystem';
+import { ScoreSystem } from '../systems/ScoreSystem';
+import { SpawnSystem } from '../systems/SpawnSystem';
+import type { Vector2 } from '../types/GameTypes';
+import {
+  ARROW_CONFIG,
+  CAMERA_CONFIG,
+  ENEMY_CONFIG,
+  HOUSE_CONFIG,
+  WORLD_CONFIG,
+} from '../utils/Constants';
 
 /**
- * Active gameplay scene; gameplay systems are attached here in later milestones.
+ * Active gameplay scene that composes entities and gameplay systems.
  */
 export class PlayScene extends Scene {
   private elapsedSeconds = 0;
-  private playerMarker: Graphics | null = null;
+  private readonly collisionSystem = new CollisionSystem();
+  private readonly unsubscribers: Array<() => void> = [];
 
-  /** Builds the placeholder play field used by the core framework milestone. */
+  private animationSystem: AnimationSystem | null = null;
+  private arrowPool: PoolSystem<Arrow> | null = null;
+  private enemyPool: PoolSystem<Enemy> | null = null;
+  private house: House | null = null;
+  private player: Player | null = null;
+  private scoreSystem: ScoreSystem | null = null;
+  private spawnSystem: SpawnSystem | null = null;
+  private gameOverTriggered = false;
+
+  /** Builds the gameplay world, entities, pools, and systems. */
   public enter(): void {
     const { width, height } = this.services.app.screen;
+    const background = this.createBackground(width, height);
+    const world = new Container();
+    const entityLayer = new Container();
+    const projectileLayer = new Container();
+    const effectLayer = new Container();
 
-    const background = new Graphics()
-      .rect(0, 0, width, height)
-      .fill({ color: 0x223044 })
-      .rect(0, height * 0.68, width, height * 0.32)
-      .fill({ color: 0x2e5d45 });
+    world.addChild(entityLayer, projectileLayer, effectLayer);
+    this.container.addChild(background, world);
 
-    const house = new Graphics()
-      .rect(-58, -40, 116, 80)
-      .fill({ color: 0xb87b4b })
-      .moveTo(-70, -40)
-      .lineTo(0, -96)
-      .lineTo(70, -40)
-      .closePath()
-      .fill({ color: 0x7c3f36 });
-    house.position.set(width / 2, height * 0.64);
+    this.player = new Player();
+    this.house = new House();
+    this.arrowPool = new PoolSystem(
+      () => new Arrow(),
+      ARROW_CONFIG.poolSize,
+      (arrow) => projectileLayer.addChild(arrow),
+    );
+    this.enemyPool = new PoolSystem(
+      () => new Enemy(),
+      ENEMY_CONFIG.poolSize,
+      (enemy) => entityLayer.addChild(enemy),
+    );
+    this.animationSystem = new AnimationSystem(effectLayer);
+    this.scoreSystem = new ScoreSystem(this.services.eventBus);
+    this.spawnSystem = new SpawnSystem(this.enemyPool, () => this.services.app.screen);
 
-    this.playerMarker = new Graphics().circle(0, 0, 22).fill({ color: 0x6ee7b7 });
-    this.playerMarker.position.set(width / 2, height * 0.54);
-
-    const hint = new Text({
-      style: {
-        fill: UI_CONFIG.textColor,
-        fontFamily: UI_CONFIG.fontFamily,
-        fontSize: UI_CONFIG.smallFontSize,
-      },
-      text: 'Core framework ready. Gameplay systems coming next. ESC pauses, R restarts.',
+    this.player.activate({
+      x: width / 2,
+      y: height * WORLD_CONFIG.playerYRatio,
     });
-    hint.anchor.set(0.5);
-    hint.position.set(width / 2, height * 0.2 + SCENE_CONFIG.playHintOffsetY);
+    this.house.activate({
+      x: width * WORLD_CONFIG.houseXRatio,
+      y: height * WORLD_CONFIG.houseYRatio,
+    });
+    this.house.resetHealth();
 
-    this.container.addChild(background, house, this.playerMarker, hint);
-    this.services.camera.setTarget(this.container);
+    entityLayer.addChild(this.house, this.player);
+    this.scoreSystem.reset();
+    this.emitHouseHealth();
+
+    this.services.camera.setTarget(world);
+    this.unsubscribers.push(
+      this.services.eventBus.on('playerShootRequested', ({ target }) => this.shootArrow(target)),
+    );
   }
 
-  /** Updates lightweight placeholder animation using delta time. */
+  /** Updates all active gameplay systems using delta time. */
   public update(deltaSeconds: number): void {
-    this.elapsedSeconds += deltaSeconds;
-
-    if (this.playerMarker === null) {
+    if (this.gameOverTriggered) {
       return;
     }
 
-    this.playerMarker.scale.set(1 + Math.sin(this.elapsedSeconds * 6) * 0.04);
+    this.elapsedSeconds += deltaSeconds;
+    this.player?.aimAt(this.services.input.getPointerPosition());
+    this.player?.update(deltaSeconds);
+    this.house?.update(deltaSeconds);
+    this.spawnSystem?.update(deltaSeconds, this.elapsedSeconds);
+
+    this.updateEnemies(deltaSeconds);
+    this.updateArrows(deltaSeconds);
+    this.resolveCollisions();
+    this.animationSystem?.update(deltaSeconds);
+  }
+
+  /** Unsubscribes scene-owned handlers and clears transient effects. */
+  public override exit(): void {
+    this.unsubscribers.forEach((unsubscribe) => unsubscribe());
+    this.unsubscribers.length = 0;
+    this.animationSystem?.clear();
+    this.services.camera.setTarget(null);
+  }
+
+  private shootArrow(target: Vector2): void {
+    if (this.arrowPool === null || this.player === null) {
+      return;
+    }
+
+    const arrow = this.arrowPool.acquire();
+    arrow.fire(this.player.getShootOrigin(), target);
+  }
+
+  private updateEnemies(deltaSeconds: number): void {
+    const enemies = this.enemyPool?.getItems() ?? [];
+
+    enemies.forEach((enemy) => enemy.update(deltaSeconds));
+  }
+
+  private updateArrows(deltaSeconds: number): void {
+    const arrows = this.arrowPool?.getItems() ?? [];
+    const { width, height } = this.services.app.screen;
+
+    arrows.forEach((arrow) => {
+      arrow.update(deltaSeconds);
+
+      if (arrow.isActive && arrow.isOutside(width, height)) {
+        this.arrowPool?.release(arrow);
+      }
+    });
+  }
+
+  private resolveCollisions(): void {
+    if (
+      this.arrowPool === null ||
+      this.enemyPool === null ||
+      this.house === null ||
+      this.scoreSystem === null
+    ) {
+      return;
+    }
+
+    const hits = this.collisionSystem.collectArrowEnemyHits(
+      this.arrowPool.getItems(),
+      this.enemyPool.getItems(),
+    );
+
+    hits.forEach(({ arrow, enemy }) => {
+      const position = enemy.getPosition();
+
+      this.arrowPool?.release(arrow);
+      this.enemyPool?.release(enemy);
+      this.scoreSystem?.addEnemyDefeat();
+      this.animationSystem?.spawnHit(position);
+      this.animationSystem?.spawnEnemyDeath(position);
+      this.requestCameraShake();
+    });
+
+    const houseContacts = this.collisionSystem.collectHouseContacts(
+      this.enemyPool.getItems(),
+      this.house,
+    );
+
+    houseContacts.forEach((enemy) => this.damageHouse(enemy));
+  }
+
+  private damageHouse(enemy: Enemy): void {
+    if (this.enemyPool === null || this.house === null || this.scoreSystem === null) {
+      return;
+    }
+
+    const position = enemy.getPosition();
+    this.enemyPool.release(enemy);
+    this.house.takeDamage(HOUSE_CONFIG.damagePerEnemy);
+    this.animationSystem?.spawnHit(position);
+    this.emitHouseHealth();
+    this.requestCameraShake();
+
+    if (this.house.getHealth() === 0) {
+      this.gameOverTriggered = true;
+      this.services.eventBus.emit('gameOver', {
+        finalScore: this.scoreSystem.getScore(),
+      });
+    }
+  }
+
+  private emitHouseHealth(): void {
+    if (this.house === null) {
+      return;
+    }
+
+    this.services.eventBus.emit('houseHealthChanged', {
+      health: this.house.getHealth(),
+      maxHealth: this.house.getMaxHealth(),
+    });
+  }
+
+  private requestCameraShake(): void {
+    this.services.eventBus.emit('cameraShakeRequested', {
+      durationSeconds: CAMERA_CONFIG.defaultShakeDurationSeconds,
+      intensity: CAMERA_CONFIG.defaultShakeIntensity,
+    });
+  }
+
+  private createBackground(width: number, height: number): Graphics {
+    const groundY = height * WORLD_CONFIG.groundYRatio;
+
+    return new Graphics()
+      .rect(0, 0, width, height)
+      .fill({ color: 0x223044 })
+      .circle(width * 0.5, height * 0.16, 54)
+      .fill({ color: 0xffd166, alpha: 0.24 })
+      .rect(0, groundY, width, height - groundY)
+      .fill({ color: 0x2e5d45 })
+      .rect(0, groundY, width, 8)
+      .fill({ color: 0x8fbf7f });
   }
 }
