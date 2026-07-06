@@ -19,9 +19,15 @@ body {
   overflow: hidden;
 }
 
-#app {
+#app,
+canvas {
   width: 100vw;
   height: 100vh;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
 }
 
 .boot-screen {
