@@ -44,7 +44,7 @@ export class GameButton extends Container {
       style: {
         fill: this.palette.text,
         fontFamily: UI_CONFIG.fontFamily,
-        fontSize: Math.min(28, Math.max(18, options.height * 0.42)),
+        fontSize: Math.min(44, Math.max(18, options.height * 0.52)),
         fontWeight: '900',
       },
       text: options.label,

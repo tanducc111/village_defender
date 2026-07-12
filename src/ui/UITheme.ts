@@ -19,9 +19,9 @@ export const UI_THEME = {
     danger: {
       border: 0x5c351b,
       disabled: 0x7b6a58,
-      fill: 0xb85d3b,
-      hover: 0xcc7048,
-      pressed: 0x8f442b,
+      fill: 0x9a5f29,
+      hover: 0xb87434,
+      pressed: 0x76451f,
       shadow: 0x3a2417,
       text: 0xfff7df,
     },

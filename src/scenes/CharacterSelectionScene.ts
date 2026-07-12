@@ -1,15 +1,19 @@
-import { Graphics, Text } from 'pixi.js';
+import { Container, Graphics, Sprite, Text } from 'pixi.js';
 
 import { Scene } from '../core/Scene';
 import { CHARACTER_CONFIGS, type CharacterConfig } from '../data/CharacterData';
+import { ENVIRONMENT_TEXTURE_CONFIG } from '../data/GameAssetData';
 import { SceneId } from '../types/GameTypes';
 import { CharacterCard } from '../ui/CharacterCard';
 import { GameButton } from '../ui/GameButton';
-import { Panel } from '../ui/Panel';
-import { UI_THEME } from '../ui/UITheme';
 import { UI_CONFIG } from '../utils/Constants';
 
 const CARD_COLORS = [0xffc928, 0x1ea7e1, 0x77b82a] as const;
+const CARD_SPACING = 365;
+const CARD_WIDTH = 330;
+const DESIGN_WIDTH = 1280;
+const DESIGN_HEIGHT = 720;
+const CARD_CENTER_Y = 390;
 const FADE_SPEED = 4.8;
 
 /**
@@ -18,19 +22,24 @@ const FADE_SPEED = 4.8;
 export class CharacterSelectionScene extends Scene {
   private readonly actionButtons: GameButton[] = [];
   private readonly cards: CharacterCard[] = [];
+  private arrowLeft: Container | null = null;
+  private arrowRight: Container | null = null;
   private elapsedSeconds = 0;
   private selectedIndex = 0;
+  private uiLayer: Container | null = null;
 
   /** Builds the character selection layout and loads optional character textures. */
   public async enter(): Promise<void> {
     const { width, height } = this.services.app.screen;
     this.container.alpha = 0;
     this.selectedIndex = this.getInitialSelectionIndex();
+    this.uiLayer = this.createUiLayer(width, height);
 
-    this.container.addChild(this.createBackground(width, height));
-    this.createTitle(width);
-    this.createCards(width, height);
-    this.createActions(width, height);
+    this.container.addChild(await this.createBackground(width, height), this.uiLayer);
+    this.createTitle();
+    this.createCards();
+    this.createSelectionArrows();
+    this.createActions();
     this.updateSelection();
     this.registerKeyboardInput();
 
@@ -48,57 +57,115 @@ export class CharacterSelectionScene extends Scene {
   /** Removes DOM listeners owned by the scene. */
   public override exit(): void {
     window.removeEventListener('keydown', this.handleKeyDown);
+    this.uiLayer = null;
   }
 
-  private createBackground(width: number, height: number): Graphics {
-    return new Graphics()
-      .rect(0, 0, width, height)
-      .fill({ color: 0x7ec8f0 })
-      .rect(0, height * 0.62, width, height * 0.38)
-      .fill({ color: 0x5b8f45 })
-      .rect(0, height * 0.78, width, height * 0.22)
-      .fill({ color: 0x8a623d });
+  private createUiLayer(width: number, height: number): Container {
+    const layer = new Container();
+    const scale = Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
+
+    layer.scale.set(scale);
+    layer.position.set((width - DESIGN_WIDTH * scale) / 2, (height - DESIGN_HEIGHT * scale) / 2);
+
+    return layer;
   }
 
-  private createTitle(width: number): void {
-    const sign = new Panel({
-      height: 92,
-      radius: 12,
-      width: 700,
-    });
-    sign.position.set(width / 2, 72);
+  private getUiLayer(): Container {
+    if (this.uiLayer === null) {
+      throw new Error('Character selection UI layer was not initialized.');
+    }
 
-    const title = new Text({
-      style: {
-        fill: UI_THEME.text.light,
-        fontFamily: UI_CONFIG.fontFamily,
-        fontSize: 52,
-        fontWeight: '900',
-      },
-      text: 'CHỌN NHÂN VẬT',
-    });
-    title.anchor.set(0.5);
-    title.position.set(width / 2, 72);
-
-    const subtitle = new Text({
-      style: {
-        fill: UI_THEME.text.dark,
-        fontFamily: UI_CONFIG.fontFamily,
-        fontSize: UI_CONFIG.smallFontSize,
-        fontWeight: '800',
-      },
-      text: 'Chọn nhân vật của bạn để bắt đầu cuộc phiêu lưu!',
-    });
-    subtitle.anchor.set(0.5);
-    subtitle.position.set(width / 2, 132);
-
-    this.container.addChild(sign, title, subtitle);
+    return this.uiLayer;
   }
 
-  private createCards(width: number, height: number): void {
-    const spacing = 355;
-    const startX = width / 2 - spacing;
-    const y = height / 2 + 40;
+  private async createBackground(width: number, height: number): Promise<Container> {
+    const layer = new Container();
+    const texture = await this.services.assets.loadOptionalTexture(
+      ENVIRONMENT_TEXTURE_CONFIG.backgroundTexture,
+    );
+
+    if (texture !== null) {
+      const background = new Sprite(texture);
+      const scale = Math.max(width / texture.width, height / texture.height);
+
+      background.anchor.set(0.5);
+      background.scale.set(scale);
+      background.position.set(width / 2, height / 2);
+      layer.addChild(background);
+    } else {
+      layer.addChild(new Graphics().rect(0, 0, width, height).fill({ color: 0x7ec8f0 }));
+    }
+
+    layer.addChild(
+      new Graphics()
+        .rect(0, 0, width, height)
+        .fill({ color: 0x0f1a12, alpha: 0.18 })
+        .rect(0, height * 0.72, width, height * 0.28)
+        .fill({ color: 0x2f1f12, alpha: 0.22 }),
+    );
+
+    return layer;
+  }
+
+  private createTitle(): void {
+    const banner = new Container();
+    const bannerWidth = 720;
+    const bannerHeight = 86;
+
+    banner.position.set(DESIGN_WIDTH / 2, 72);
+    banner.addChild(
+      new Graphics()
+        .roundRect(-bannerWidth / 2 + 8, -bannerHeight / 2 + 10, bannerWidth, bannerHeight, 18)
+        .fill({ color: 0x2b170b, alpha: 0.32 })
+        .roundRect(-bannerWidth / 2, -bannerHeight / 2, bannerWidth, bannerHeight, 18)
+        .fill({ color: 0xa8642c })
+        .stroke({ color: 0x5c351b, width: 5 })
+        .roundRect(-bannerWidth / 2 + 18, -bannerHeight / 2 + 12, bannerWidth - 36, 14, 8)
+        .fill({ color: 0xd68b3c, alpha: 0.46 }),
+    );
+
+    this.addLeaves(banner, -bannerWidth / 2 + 18, -22, -1);
+    this.addLeaves(banner, bannerWidth / 2 - 18, -22, 1);
+
+    const titleShadow = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0x3b2414, 0x3b2414, 2);
+    const title = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0xffffff, 0x3b2414, 8);
+
+    titleShadow.position.set(0, 6);
+    title.position.set(0, 0);
+    banner.addChild(titleShadow, title);
+
+    const subtitle = this.createOutlinedText(
+      'Chọn nhân vật của bạn để bắt đầu cuộc phiêu lưu!',
+      26,
+      0xffffff,
+      0x2b1a0e,
+      5,
+    );
+    subtitle.position.set(DESIGN_WIDTH / 2, 143);
+
+    this.getUiLayer().addChild(banner, subtitle);
+  }
+
+  private addLeaves(parent: Container, x: number, y: number, direction: -1 | 1): void {
+    const colors = [0x3f8f2f, 0x5aa63b, 0x2f7626];
+
+    for (let index = 0; index < 6; index += 1) {
+      const leaf = new Graphics()
+        .ellipse(0, 0, 8, 16)
+        .fill({ color: colors[index % colors.length] ?? colors[0] })
+        .stroke({ color: 0x1f5b1d, alpha: 0.5, width: 1 });
+
+      leaf.position.set(
+        x + direction * (index < 3 ? 0 : 18),
+        y + (index % 3) * 14,
+      );
+      leaf.rotation = direction * (-0.55 + index * 0.18);
+      parent.addChild(leaf);
+    }
+  }
+
+  private createCards(): void {
+    const startX = DESIGN_WIDTH / 2 - CARD_SPACING;
 
     CHARACTER_CONFIGS.forEach((character, index) => {
       const card = new CharacterCard({
@@ -107,38 +174,67 @@ export class CharacterSelectionScene extends Scene {
         onSelect: () => this.selectIndex(index),
       });
 
-      card.position.set(startX + index * spacing, y);
+      card.position.set(startX + index * CARD_SPACING, CARD_CENTER_Y);
       this.cards.push(card);
-      this.container.addChild(card);
+      this.getUiLayer().addChild(card);
     });
   }
 
-  private createActions(width: number, height: number): void {
+  private createSelectionArrows(): void {
+    this.arrowLeft = this.createArrowButton(-1, () => this.selectIndex(this.selectedIndex - 1));
+    this.arrowRight = this.createArrowButton(1, () => this.selectIndex(this.selectedIndex + 1));
+    this.getUiLayer().addChild(this.arrowLeft, this.arrowRight);
+  }
+
+  private createArrowButton(direction: -1 | 1, onPress: () => void): Container {
+    const button = new Container();
+    const shape = new Graphics();
+
+    shape
+      .roundRect(-22, -32, 44, 64, 16)
+      .fill({ color: 0xffb12e })
+      .stroke({ color: 0xffffff, width: 4 })
+      .moveTo(direction * -8, -18)
+      .lineTo(direction * 10, 0)
+      .lineTo(direction * -8, 18)
+      .stroke({ color: 0xffffff, width: 8 });
+
+    button.addChild(
+      new Graphics().roundRect(-18, -28, 44, 64, 16).fill({ color: 0x3b2414, alpha: 0.24 }),
+      shape,
+    );
+    button.eventMode = 'static';
+    button.cursor = 'pointer';
+    button.on('pointertap', onPress);
+
+    return button;
+  }
+
+  private createActions(): void {
     const backButton = new GameButton({
-      height: 52,
-      label: 'QUAY LẠI',
+      height: 54,
+      label: '←  QUAY LẠI',
       onPress: () => {
         void this.services.setScene(SceneId.Menu);
       },
       variant: 'danger',
-      width: 190,
+      width: 220,
     });
-    backButton.position.set(136, height - 36);
+    backButton.position.set(136, DESIGN_HEIGHT - 34);
 
     const startButton = new GameButton({
-      height: 52,
+      height: 64,
       label: 'BẮT ĐẦU',
       onPress: () => {
         void this.startGame();
       },
-      variant: 'primary',
-      width: 260,
+      variant: 'secondary',
+      width: 310,
     });
-    startButton.position.set(width / 2, height - 36);
-    startButton.setFocused(true);
+    startButton.position.set(DESIGN_WIDTH / 2, DESIGN_HEIGHT - 36);
 
     this.actionButtons.push(backButton, startButton);
-    this.container.addChild(backButton, startButton);
+    this.getUiLayer().addChild(backButton, startButton);
   }
 
   private async loadCardTextures(): Promise<void> {
@@ -156,8 +252,15 @@ export class CharacterSelectionScene extends Scene {
   }
 
   private updateSelection(): void {
+    const selectedCard = this.cards[this.selectedIndex];
+
     this.cards.forEach((card, index) => card.setSelected(index === this.selectedIndex));
     this.services.gameSession.setSelectedCharacterId(this.getSelectedCharacter().id);
+
+    if (selectedCard !== undefined && this.arrowLeft !== null && this.arrowRight !== null) {
+      this.arrowLeft.position.set(selectedCard.x - CARD_WIDTH / 2 - 44, selectedCard.y - 36);
+      this.arrowRight.position.set(selectedCard.x + CARD_WIDTH / 2 + 44, selectedCard.y - 36);
+    }
   }
 
   private getInitialSelectionIndex(): number {
@@ -204,5 +307,29 @@ export class CharacterSelectionScene extends Scene {
   private async startGame(): Promise<void> {
     this.services.gameSession.setSelectedCharacterId(this.getSelectedCharacter().id);
     await this.services.setScene(SceneId.Play);
+  }
+
+  private createOutlinedText(
+    text: string,
+    fontSize: number,
+    fill: number,
+    stroke: number,
+    strokeWidth: number,
+  ): Text {
+    const label = new Text({
+      style: {
+        align: 'center',
+        fill,
+        fontFamily: UI_CONFIG.fontFamily,
+        fontSize,
+        fontWeight: '900',
+        lineHeight: fontSize * 1.12,
+        stroke: { color: stroke, width: strokeWidth },
+      },
+      text,
+    });
+    label.anchor.set(0.5);
+
+    return label;
   }
 }
