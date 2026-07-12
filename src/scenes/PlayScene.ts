@@ -1,8 +1,8 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Sprite } from 'pixi.js';
 
 import { Scene } from '../core/Scene';
 import { Arrow } from '../entities/Arrow';
-import { Enemy } from '../entities/Enemy';
+import { Enemy, type EnemyFrameMap } from '../entities/Enemy';
 import { House } from '../entities/House';
 import { Player } from '../entities/Player';
 import { AnimationSystem } from '../systems/AnimationSystem';
@@ -10,15 +10,18 @@ import { CollisionSystem } from '../systems/CollisionSystem';
 import { PoolSystem } from '../systems/PoolSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
-import type { Vector2 } from '../types/GameTypes';
+import { AssetKey } from '../types/AssetTypes';
+import { EnemyKind, type Vector2 } from '../types/GameTypes';
 import { HUD } from '../ui/HUD';
 import {
   ARROW_CONFIG,
   CAMERA_CONFIG,
   ENEMY_CONFIG,
   HOUSE_CONFIG,
+  SPRITE_CONFIG,
   WORLD_CONFIG,
 } from '../utils/Constants';
+import { createSpriteFrames } from '../utils/SpriteSheet';
 
 /**
  * Active gameplay scene that composes entities and gameplay systems.
@@ -46,19 +49,33 @@ export class PlayScene extends Scene {
     const entityLayer = new Container();
     const projectileLayer = new Container();
     const effectLayer = new Container();
+    const playerFrames = createSpriteFrames(
+      this.services.assets.getTexture(AssetKey.PlayerPeanut),
+      SPRITE_CONFIG.frameSize,
+      SPRITE_CONFIG.frameSize,
+      SPRITE_CONFIG.playerFrameCount,
+    );
+    const arrowFrames = createSpriteFrames(
+      this.services.assets.getTexture(AssetKey.WeaponFlipFlop),
+      SPRITE_CONFIG.frameSize,
+      SPRITE_CONFIG.frameSize,
+      SPRITE_CONFIG.weaponFrameCount,
+      { x: 0.5, y: 0.5 },
+    );
+    const enemyFrames = this.createEnemyFrames();
 
     world.addChild(entityLayer, projectileLayer, effectLayer);
     this.container.addChild(background, world);
 
-    this.player = new Player();
-    this.house = new House();
+    this.player = new Player(playerFrames);
+    this.house = new House(this.services.assets.getTexture(AssetKey.HouseVietnam));
     this.arrowPool = new PoolSystem(
-      () => new Arrow(),
+      () => new Arrow(arrowFrames),
       ARROW_CONFIG.poolSize,
       (arrow) => projectileLayer.addChild(arrow),
     );
     this.enemyPool = new PoolSystem(
-      () => new Enemy(),
+      () => new Enemy(enemyFrames),
       ENEMY_CONFIG.poolSize,
       (enemy) => entityLayer.addChild(enemy),
     );
@@ -68,7 +85,7 @@ export class PlayScene extends Scene {
     this.spawnSystem = new SpawnSystem(this.enemyPool, () => this.services.app.screen);
 
     this.player.activate({
-      x: width / 2,
+      x: width * WORLD_CONFIG.playerXRatio,
       y: height * WORLD_CONFIG.playerYRatio,
     });
     this.house.activate({
@@ -122,6 +139,7 @@ export class PlayScene extends Scene {
 
     const arrow = this.arrowPool.acquire();
     arrow.fire(this.player.getShootOrigin(), target);
+    this.player.playThrow();
   }
 
   private updateEnemies(deltaSeconds: number): void {
@@ -220,17 +238,35 @@ export class PlayScene extends Scene {
     });
   }
 
-  private createBackground(width: number, height: number): Graphics {
-    const groundY = height * WORLD_CONFIG.groundYRatio;
+  private createBackground(width: number, height: number): Sprite {
+    const background = new Sprite(this.services.assets.getTexture(AssetKey.BackgroundVillage));
 
-    return new Graphics()
-      .rect(0, 0, width, height)
-      .fill({ color: 0x223044 })
-      .circle(width * 0.5, height * 0.16, 54)
-      .fill({ color: 0xffd166, alpha: 0.24 })
-      .rect(0, groundY, width, height - groundY)
-      .fill({ color: 0x2e5d45 })
-      .rect(0, groundY, width, 8)
-      .fill({ color: 0x8fbf7f });
+    background.width = width;
+    background.height = height;
+
+    return background;
+  }
+
+  private createEnemyFrames(): EnemyFrameMap {
+    return {
+      [EnemyKind.Big]: createSpriteFrames(
+        this.services.assets.getTexture(AssetKey.EnemyBig),
+        SPRITE_CONFIG.frameSize,
+        SPRITE_CONFIG.frameSize,
+        SPRITE_CONFIG.enemyFrameCount,
+      ),
+      [EnemyKind.Normal]: createSpriteFrames(
+        this.services.assets.getTexture(AssetKey.EnemyNormal),
+        SPRITE_CONFIG.frameSize,
+        SPRITE_CONFIG.frameSize,
+        SPRITE_CONFIG.enemyFrameCount,
+      ),
+      [EnemyKind.Spike]: createSpriteFrames(
+        this.services.assets.getTexture(AssetKey.EnemySpike),
+        SPRITE_CONFIG.frameSize,
+        SPRITE_CONFIG.frameSize,
+        SPRITE_CONFIG.enemyFrameCount,
+      ),
+    };
   }
 }

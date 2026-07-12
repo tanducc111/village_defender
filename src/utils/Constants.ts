@@ -44,11 +44,12 @@ export const TIME = {
 } as const;
 
 export const WORLD_CONFIG = {
-  enemyLaneYRatio: 0.66,
+  enemyLaneYRatio: 0.76,
   groundYRatio: 0.7,
   houseXRatio: 0.5,
-  houseYRatio: 0.64,
-  playerYRatio: 0.54,
+  houseYRatio: 0.76,
+  playerXRatio: 0.42,
+  playerYRatio: 0.76,
 } as const;
 
 export const PLAYER_CONFIG = {
@@ -67,11 +68,17 @@ export const HOUSE_CONFIG = {
 
 export const ENEMY_CONFIG = {
   baseSpeed: 88,
+  bigCollisionRadius: 30,
+  bigSpeedMultiplier: 0.78,
+  bigWeight: 0.24,
   collisionRadius: 24,
   height: 54,
   maxSpeed: 210,
+  normalWeight: 0.58,
   poolSize: 18,
   speedIncreasePerSecond: 2.4,
+  spikeCollisionRadius: 28,
+  spikeSpeedMultiplier: 1.12,
   width: 42,
 } as const;
 
@@ -102,4 +109,11 @@ export const PARTICLE_CONFIG = {
   maxSpeed: 180,
   minSpeed: 70,
   radius: 3,
+} as const;
+
+export const SPRITE_CONFIG = {
+  enemyFrameCount: 4,
+  frameSize: 64,
+  playerFrameCount: 4,
+  weaponFrameCount: 8,
 } as const;

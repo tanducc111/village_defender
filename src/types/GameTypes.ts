@@ -26,6 +26,13 @@ export enum SpawnSide {
   Right = 'right',
 }
 
+/** Enemy visual and balancing variant. */
+export enum EnemyKind {
+  Big = 'big',
+  Normal = 'normal',
+  Spike = 'spike',
+}
+
 /** Immutable two-dimensional coordinate used by input, movement, and effects. */
 export interface Vector2 {
   readonly x: number;

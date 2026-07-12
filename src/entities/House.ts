@@ -1,4 +1,5 @@
-import { Graphics } from 'pixi.js';
+import { Sprite } from 'pixi.js';
+import type { Texture } from 'pixi.js';
 
 import { HOUSE_CONFIG } from '../utils/Constants';
 import { Entity } from './Entity';
@@ -7,14 +8,16 @@ import { Entity } from './Entity';
  * Village house that enemies try to damage; its health drives game over.
  */
 export class House extends Entity {
-  private readonly shape = new Graphics();
+  private readonly sprite: Sprite;
   private health: number = HOUSE_CONFIG.maxHealth;
   private flashSeconds = 0;
 
-  public constructor() {
+  public constructor(texture: Texture) {
     super();
-    this.draw();
-    this.addChild(this.shape);
+    this.sprite = new Sprite(texture);
+    this.sprite.anchor.set(0.5, 1);
+    this.sprite.scale.set(1.08);
+    this.addChild(this.sprite);
   }
 
   /** Radius used when testing whether enemies reached the house. */
@@ -57,16 +60,4 @@ export class House extends Entity {
     this.alpha = this.flashSeconds === 0 ? 1 : this.alpha;
   }
 
-  private draw(): void {
-    this.shape
-      .rect(-HOUSE_CONFIG.width / 2, -HOUSE_CONFIG.height / 2, HOUSE_CONFIG.width, HOUSE_CONFIG.height)
-      .fill({ color: 0xb87b4b })
-      .moveTo(-HOUSE_CONFIG.width / 2 - 16, -HOUSE_CONFIG.height / 2)
-      .lineTo(0, -HOUSE_CONFIG.height)
-      .lineTo(HOUSE_CONFIG.width / 2 + 16, -HOUSE_CONFIG.height / 2)
-      .closePath()
-      .fill({ color: 0x7c3f36 })
-      .rect(-16, -4, 32, 48)
-      .fill({ color: 0x513024 });
-  }
 }

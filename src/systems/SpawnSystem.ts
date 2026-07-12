@@ -1,7 +1,7 @@
 import type { Rectangle } from 'pixi.js';
 
 import type { Enemy } from '../entities/Enemy';
-import { SpawnSide } from '../types/GameTypes';
+import { EnemyKind, SpawnSide } from '../types/GameTypes';
 import { ENEMY_CONFIG, SPAWN_CONFIG, WORLD_CONFIG } from '../utils/Constants';
 import { clamp, randomRange } from '../utils/MathUtil';
 import { randomBoolean } from '../utils/Random';
@@ -42,13 +42,14 @@ export class SpawnSystem {
     const y =
       screen.height * WORLD_CONFIG.enemyLaneYRatio +
       randomRange(-SPAWN_CONFIG.yJitter, SPAWN_CONFIG.yJitter);
+    const kind = this.pickEnemyKind();
     const speed = clamp(
       ENEMY_CONFIG.baseSpeed + elapsedSeconds * ENEMY_CONFIG.speedIncreasePerSecond,
       ENEMY_CONFIG.baseSpeed,
       ENEMY_CONFIG.maxSpeed,
-    );
+    ) * this.getSpeedMultiplier(kind);
 
-    this.enemyPool.acquire().spawn({ x, y }, side, speed);
+    this.enemyPool.acquire().spawn({ x, y }, side, speed, kind);
   }
 
   private getSpawnInterval(elapsedSeconds: number): number {
@@ -57,5 +58,31 @@ export class SpawnSystem {
       SPAWN_CONFIG.minimumIntervalSeconds,
       SPAWN_CONFIG.initialIntervalSeconds,
     );
+  }
+
+  private pickEnemyKind(): EnemyKind {
+    const roll = Math.random();
+
+    if (roll < ENEMY_CONFIG.normalWeight) {
+      return EnemyKind.Normal;
+    }
+
+    if (roll < ENEMY_CONFIG.normalWeight + ENEMY_CONFIG.bigWeight) {
+      return EnemyKind.Big;
+    }
+
+    return EnemyKind.Spike;
+  }
+
+  private getSpeedMultiplier(kind: EnemyKind): number {
+    if (kind === EnemyKind.Big) {
+      return ENEMY_CONFIG.bigSpeedMultiplier;
+    }
+
+    if (kind === EnemyKind.Spike) {
+      return ENEMY_CONFIG.spikeSpeedMultiplier;
+    }
+
+    return 1;
   }
 }

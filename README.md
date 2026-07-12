@@ -14,6 +14,7 @@ This project is designed as a Game Web Intern portfolio piece. The focus is clea
 - Collision detection for arrows, enemies, and the village house
 - Score and house HP HUD
 - Camera shake, hit particles, enemy death effects, and arrow trails
+- Project-local Vietnamese village placeholder PNG assets
 - Restart and pause flow
 - ESLint, Prettier, Vite production build, Docker, Nginx, and GitHub Actions
 
@@ -171,6 +172,7 @@ src/
 - `PlayScene` composes systems but delegates rules to smaller classes to avoid a god object.
 - All tunable values live in `Constants.ts` so balancing does not require digging through logic.
 - Docker uses a multi-stage build: Node creates static assets and Nginx serves the optimized output.
+- Placeholder assets are generated into `src/assets` and loaded through `AssetLoader`, which keeps asset paths out of entity logic.
 
 ## Installation
 
@@ -203,6 +205,16 @@ docker compose up --build
 ```
 
 The container serves the game through Nginx at [http://localhost:8080](http://localhost:8080).
+
+## Assets
+
+The current art set is generated from the included PowerShell script:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/generate-assets.ps1
+```
+
+The generated assets follow the requested Vietnamese village direction: peanut-style player, alternate duck and cow players, normal/big/spiky enemies, flip-flop projectile, and a traditional house/base.
 
 ## Deployment
 
