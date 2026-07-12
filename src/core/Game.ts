@@ -1,11 +1,13 @@
 import { Application } from 'pixi.js';
 import type { Ticker } from 'pixi.js';
 
+import { CharacterSelectionScene } from '../scenes/CharacterSelectionScene';
 import { LoadingScene } from '../scenes/LoadingScene';
 import { MenuScene } from '../scenes/MenuScene';
 import { PauseScene } from '../scenes/PauseScene';
 import { PlayScene } from '../scenes/PlayScene';
 import { GameOverScene } from '../scenes/GameOverScene';
+import { GameSessionState } from '../state/GameState';
 import type { SceneData } from '../types/GameTypes';
 import { GameState, SceneId } from '../types/GameTypes';
 import type { SceneServices } from '../types/SceneServices';
@@ -26,6 +28,7 @@ export class Game {
   private readonly camera = new Camera();
   private readonly eventBus = new EventBus();
   private readonly assetLoader = new AssetLoader(this.eventBus);
+  private readonly gameSession = new GameSessionState();
   private readonly sceneFactories = new Map<SceneId, SceneFactory>();
   private readonly unsubscribers: Array<() => void> = [];
 
@@ -93,6 +96,10 @@ export class Game {
   private registerScenes(): void {
     this.sceneFactories.set(SceneId.Loading, (services) => new LoadingScene(services));
     this.sceneFactories.set(SceneId.Menu, (services) => new MenuScene(services));
+    this.sceneFactories.set(
+      SceneId.CharacterSelection,
+      (services) => new CharacterSelectionScene(services),
+    );
     this.sceneFactories.set(SceneId.Play, (services) => new PlayScene(services));
     this.sceneFactories.set(SceneId.Pause, (services) => new PauseScene(services));
     this.sceneFactories.set(SceneId.GameOver, (services) => new GameOverScene(services));
@@ -198,6 +205,7 @@ export class Game {
       assets: this.assetLoader,
       camera: this.camera,
       eventBus: this.eventBus,
+      gameSession: this.gameSession,
       getGameState: () => this.gameState,
       input: this.inputManager,
       setGameState: (state) => {
@@ -210,6 +218,12 @@ export class Game {
   private setGameStateForScene(sceneId: SceneId): void {
     if (sceneId === SceneId.Menu) {
       this.gameState = GameState.Menu;
+      this.eventBus.emit('pauseChanged', { paused: false });
+      return;
+    }
+
+    if (sceneId === SceneId.CharacterSelection) {
+      this.gameState = GameState.CharacterSelection;
       this.eventBus.emit('pauseChanged', { paused: false });
       return;
     }

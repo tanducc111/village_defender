@@ -19,6 +19,20 @@ export function randomRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
+/** Returns the largest uniform scale that fits a source rectangle inside a target rectangle. */
+export function getContainScale(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): number {
+  if (sourceWidth <= 0 || sourceHeight <= 0) {
+    return 1;
+  }
+
+  return Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+}
+
 /** Returns a normalized vector, using the fallback when the input has no length. */
 export function normalizeVector(vector: Vector2, fallback: Vector2 = { x: 1, y: 0 }): Vector2 {
   const length = Math.hypot(vector.x, vector.y);

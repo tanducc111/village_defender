@@ -2,22 +2,24 @@ import { Sprite } from 'pixi.js';
 import type { Texture } from 'pixi.js';
 
 import { HOUSE_CONFIG } from '../utils/Constants';
+import { getContainScale } from '../utils/MathUtil';
 import { Entity } from './Entity';
 
 /**
  * Village house that enemies try to damage; its health drives game over.
  */
 export class House extends Entity {
-  private readonly sprite: Sprite;
+  private readonly sprite: Sprite | null;
   private health: number = HOUSE_CONFIG.maxHealth;
   private flashSeconds = 0;
 
-  public constructor(texture: Texture) {
+  public constructor(texture: Texture | null) {
     super();
-    this.sprite = new Sprite(texture);
-    this.sprite.anchor.set(0.5, 1);
-    this.sprite.scale.set(1.08);
-    this.addChild(this.sprite);
+    this.sprite = this.createSprite(texture);
+
+    if (this.sprite !== null) {
+      this.addChild(this.sprite);
+    }
   }
 
   /** Radius used when testing whether enemies reached the house. */
@@ -60,4 +62,22 @@ export class House extends Entity {
     this.alpha = this.flashSeconds === 0 ? 1 : this.alpha;
   }
 
+  private createSprite(texture: Texture | null): Sprite | null {
+    if (texture === null) {
+      return null;
+    }
+
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5, 1);
+    sprite.scale.set(
+      getContainScale(
+        texture.width,
+        texture.height,
+        HOUSE_CONFIG.spriteMaxWidth,
+        HOUSE_CONFIG.spriteMaxHeight,
+      ),
+    );
+
+    return sprite;
+  }
 }

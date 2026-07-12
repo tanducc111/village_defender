@@ -1,75 +1,72 @@
 import { Assets } from 'pixi.js';
 import type { Texture } from 'pixi.js';
 
-import backgroundVillageUrl from '../assets/backgrounds/vietnam-village.png';
-import enemyBigUrl from '../assets/sprites/enemy-big.png';
-import enemyNormalUrl from '../assets/sprites/enemy-normal.png';
-import enemySpikeUrl from '../assets/sprites/enemy-spike.png';
-import houseVietnamUrl from '../assets/sprites/house-vietnam.png';
-import playerCowUrl from '../assets/sprites/player-cow.png';
-import playerDuckUrl from '../assets/sprites/player-duck.png';
-import playerPeanutUrl from '../assets/sprites/player-peanut.png';
-import weaponFlipFlopUrl from '../assets/sprites/weapon-flipflop.png';
-import { AssetKey } from '../types/AssetTypes';
+import { APPROVED_TEXTURE_PATHS } from '../data/ApprovedAssetManifest';
 import type { EventBus } from './EventBus';
 
-const ASSET_SOURCES: Record<AssetKey, string> = {
-  [AssetKey.BackgroundVillage]: backgroundVillageUrl,
-  [AssetKey.EnemyBig]: enemyBigUrl,
-  [AssetKey.EnemyNormal]: enemyNormalUrl,
-  [AssetKey.EnemySpike]: enemySpikeUrl,
-  [AssetKey.HouseVietnam]: houseVietnamUrl,
-  [AssetKey.PlayerCow]: playerCowUrl,
-  [AssetKey.PlayerDuck]: playerDuckUrl,
-  [AssetKey.PlayerPeanut]: playerPeanutUrl,
-  [AssetKey.WeaponFlipFlop]: weaponFlipFlopUrl,
-};
-
 /**
- * Owns asset loading and keeps PixiJS asset APIs away from gameplay code.
+ * Owns PixiJS asset loading and provides optional texture access for development.
  */
 export class AssetLoader {
-  private readonly textures = new Map<AssetKey, Texture>();
+  private readonly texturePromises = new Map<string, Promise<Texture | null>>();
+  private readonly textures = new Map<string, Texture | null>();
   private loaded = false;
 
   public constructor(private readonly eventBus: EventBus) {}
 
-  /** Loads the initial asset bundle required before showing the main menu. */
+  /** Initializes PixiJS Assets before scenes request optional textures. */
   public async loadInitialAssets(): Promise<void> {
     if (this.loaded) {
       return;
     }
 
     await Assets.init({});
-    const entries = Object.entries(ASSET_SOURCES) as Array<[AssetKey, string]>;
-    const loadedTextures = await Promise.all(
-      entries.map(async ([key, source]) => ({
-        key,
-        texture: await Assets.load<Texture>(source),
-      })),
-    );
-
-    loadedTextures.forEach(({ key, texture }) => {
-      this.textures.set(key, texture);
-    });
-
     this.loaded = true;
-    this.eventBus.emit('assetsLoaded', { total: loadedTextures.length });
+    this.eventBus.emit('assetsLoaded', { total: 0 });
   }
 
-  /** Indicates whether the initial bundle has already been loaded. */
+  /** Indicates whether the asset system is ready. */
   public isLoaded(): boolean {
     return this.loaded;
   }
 
-  /** Returns a loaded texture by stable asset key. */
-  public getTexture(key: AssetKey): Texture {
-    const texture = this.textures.get(key);
+  /** Loads one optional texture path, returning null when the file is not available. */
+  public async loadOptionalTexture(path: string): Promise<Texture | null> {
+    const existingTexture = this.textures.get(path);
 
-    if (texture === undefined) {
-      throw new Error(`Texture has not been loaded: ${key}`);
+    if (existingTexture !== undefined) {
+      return existingTexture;
     }
 
+    const existingPromise = this.texturePromises.get(path);
+
+    if (existingPromise !== undefined) {
+      return existingPromise;
+    }
+
+    const promise = this.loadTextureSafely(path);
+    this.texturePromises.set(path, promise);
+
+    const texture = await promise;
+    this.textures.set(path, texture);
+
     return texture;
+  }
+
+  /** Loads multiple optional texture paths while preserving order. */
+  public async loadOptionalTextures(paths: readonly string[]): Promise<Array<Texture | null>> {
+    return Promise.all(paths.map((path) => this.loadOptionalTexture(path)));
+  }
+
+  private async loadTextureSafely(path: string): Promise<Texture | null> {
+    if (!APPROVED_TEXTURE_PATHS.has(path)) {
+      return null;
+    }
+
+    try {
+      return await Assets.load<Texture>(path);
+    } catch {
+      return null;
+    }
   }
 }

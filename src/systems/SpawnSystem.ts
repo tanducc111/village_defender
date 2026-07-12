@@ -2,16 +2,18 @@ import type { Rectangle } from 'pixi.js';
 
 import type { Enemy } from '../entities/Enemy';
 import { EnemyKind, SpawnSide } from '../types/GameTypes';
-import { ENEMY_CONFIG, SPAWN_CONFIG, WORLD_CONFIG } from '../utils/Constants';
-import { clamp, randomRange } from '../utils/MathUtil';
+import { DIFFICULTY_CONFIG, ENEMY_CONFIG, SPAWN_CONFIG, WORLD_CONFIG } from '../utils/Constants';
+import { clamp } from '../utils/MathUtil';
 import { randomBoolean } from '../utils/Random';
 import type { PoolSystem } from './PoolSystem';
+
+type DifficultyLevel = (typeof DIFFICULTY_CONFIG.levels)[number];
 
 /**
  * Controls enemy spawn timing, side selection, and difficulty scaling.
  */
 export class SpawnSystem {
-  private timerSeconds: number = SPAWN_CONFIG.initialIntervalSeconds;
+  private timerSeconds: number = this.getDifficultyLevel(0).spawnIntervalSeconds;
 
   public constructor(
     private readonly enemyPool: PoolSystem<Enemy>,
@@ -32,19 +34,18 @@ export class SpawnSystem {
 
   /** Resets spawn timing for a fresh run. */
   public reset(): void {
-    this.timerSeconds = SPAWN_CONFIG.initialIntervalSeconds;
+    this.timerSeconds = this.getDifficultyLevel(0).spawnIntervalSeconds;
   }
 
   private spawnEnemy(elapsedSeconds: number): void {
     const screen = this.getScreen();
+    const difficultyLevel = this.getDifficultyLevel(elapsedSeconds);
     const side = randomBoolean() ? SpawnSide.Left : SpawnSide.Right;
     const x = side === SpawnSide.Left ? -SPAWN_CONFIG.edgePadding : screen.width + SPAWN_CONFIG.edgePadding;
-    const y =
-      screen.height * WORLD_CONFIG.enemyLaneYRatio +
-      randomRange(-SPAWN_CONFIG.yJitter, SPAWN_CONFIG.yJitter);
-    const kind = this.pickEnemyKind();
+    const y = WORLD_CONFIG.roadY;
+    const kind = this.pickEnemyKind(difficultyLevel);
     const speed = clamp(
-      ENEMY_CONFIG.baseSpeed + elapsedSeconds * ENEMY_CONFIG.speedIncreasePerSecond,
+      ENEMY_CONFIG.baseSpeed * difficultyLevel.speedMultiplier,
       ENEMY_CONFIG.baseSpeed,
       ENEMY_CONFIG.maxSpeed,
     ) * this.getSpeedMultiplier(kind);
@@ -53,25 +54,34 @@ export class SpawnSystem {
   }
 
   private getSpawnInterval(elapsedSeconds: number): number {
-    return clamp(
-      SPAWN_CONFIG.initialIntervalSeconds - elapsedSeconds * SPAWN_CONFIG.intervalDecreasePerSecond,
-      SPAWN_CONFIG.minimumIntervalSeconds,
-      SPAWN_CONFIG.initialIntervalSeconds,
-    );
+    return this.getDifficultyLevel(elapsedSeconds).spawnIntervalSeconds;
   }
 
-  private pickEnemyKind(): EnemyKind {
+  private pickEnemyKind(difficultyLevel: DifficultyLevel): EnemyKind {
     const roll = Math.random();
+    const normalWeight = Math.max(
+      0,
+      1 - difficultyLevel.bigWeight - difficultyLevel.spikeWeight,
+    );
 
-    if (roll < ENEMY_CONFIG.normalWeight) {
+    if (roll < normalWeight) {
       return EnemyKind.Normal;
     }
 
-    if (roll < ENEMY_CONFIG.normalWeight + ENEMY_CONFIG.bigWeight) {
+    if (roll < normalWeight + difficultyLevel.bigWeight) {
       return EnemyKind.Big;
     }
 
     return EnemyKind.Spike;
+  }
+
+  private getDifficultyLevel(elapsedSeconds: number): DifficultyLevel {
+    const levelIndex = Math.min(
+      Math.floor(elapsedSeconds / DIFFICULTY_CONFIG.levelDurationSeconds),
+      DIFFICULTY_CONFIG.levels.length - 1,
+    );
+
+    return DIFFICULTY_CONFIG.levels[levelIndex] ?? DIFFICULTY_CONFIG.levels[0];
   }
 
   private getSpeedMultiplier(kind: EnemyKind): number {

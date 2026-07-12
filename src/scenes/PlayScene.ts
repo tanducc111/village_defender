@@ -1,27 +1,25 @@
 import { Container, Sprite } from 'pixi.js';
+import type { Texture } from 'pixi.js';
 
-import { Scene } from '../core/Scene';
+import { getCharacterConfig } from '../data/CharacterData';
+import {
+  ENEMY_TEXTURE_CONFIGS,
+  ENVIRONMENT_TEXTURE_CONFIG,
+  WEAPON_TEXTURE_CONFIG,
+} from '../data/GameAssetData';
 import { Arrow } from '../entities/Arrow';
-import { Enemy, type EnemyFrameMap } from '../entities/Enemy';
+import { Enemy, EnemyDamageResult, type EnemyTextureMap } from '../entities/Enemy';
 import { House } from '../entities/House';
-import { Player } from '../entities/Player';
+import { Player, type PlayerTextures } from '../entities/Player';
 import { AnimationSystem } from '../systems/AnimationSystem';
 import { CollisionSystem } from '../systems/CollisionSystem';
 import { PoolSystem } from '../systems/PoolSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
-import { AssetKey } from '../types/AssetTypes';
 import { EnemyKind, type Vector2 } from '../types/GameTypes';
 import { HUD } from '../ui/HUD';
-import {
-  ARROW_CONFIG,
-  CAMERA_CONFIG,
-  ENEMY_CONFIG,
-  HOUSE_CONFIG,
-  SPRITE_CONFIG,
-  WORLD_CONFIG,
-} from '../utils/Constants';
-import { createSpriteFrames } from '../utils/SpriteSheet';
+import { ARROW_CONFIG, CAMERA_CONFIG, ENEMY_CONFIG, HOUSE_CONFIG, WORLD_CONFIG } from '../utils/Constants';
+import { Scene } from '../core/Scene';
 
 /**
  * Active gameplay scene that composes entities and gameplay systems.
@@ -36,46 +34,46 @@ export class PlayScene extends Scene {
   private enemyPool: PoolSystem<Enemy> | null = null;
   private house: House | null = null;
   private hud: HUD | null = null;
+  private readonly pendingEnemyReleases: Array<{ enemy: Enemy; remainingSeconds: number }> = [];
   private player: Player | null = null;
   private scoreSystem: ScoreSystem | null = null;
   private spawnSystem: SpawnSystem | null = null;
   private gameOverTriggered = false;
 
   /** Builds the gameplay world, entities, pools, and systems. */
-  public enter(): void {
+  public async enter(): Promise<void> {
     const { width, height } = this.services.app.screen;
-    const background = this.createBackground(width, height);
+    const roadY = WORLD_CONFIG.roadY;
+    const background = await this.createBackground(width, height);
     const world = new Container();
     const entityLayer = new Container();
     const projectileLayer = new Container();
     const effectLayer = new Container();
-    const playerFrames = createSpriteFrames(
-      this.services.assets.getTexture(AssetKey.PlayerPeanut),
-      SPRITE_CONFIG.frameSize,
-      SPRITE_CONFIG.frameSize,
-      SPRITE_CONFIG.playerFrameCount,
+    const playerTextures = await this.loadSelectedPlayerTextures();
+    const enemyTextures = await this.loadEnemyTextures();
+    const projectileTexture = await this.services.assets.loadOptionalTexture(
+      WEAPON_TEXTURE_CONFIG.projectileTexture,
     );
-    const arrowFrames = createSpriteFrames(
-      this.services.assets.getTexture(AssetKey.WeaponFlipFlop),
-      SPRITE_CONFIG.frameSize,
-      SPRITE_CONFIG.frameSize,
-      SPRITE_CONFIG.weaponFrameCount,
-      { x: 0.5, y: 0.5 },
+    const houseTexture = await this.services.assets.loadOptionalTexture(
+      ENVIRONMENT_TEXTURE_CONFIG.houseTexture,
     );
-    const enemyFrames = this.createEnemyFrames();
+
+    this.elapsedSeconds = 0;
+    this.gameOverTriggered = false;
+    this.pendingEnemyReleases.length = 0;
 
     world.addChild(entityLayer, projectileLayer, effectLayer);
     this.container.addChild(background, world);
 
-    this.player = new Player(playerFrames);
-    this.house = new House(this.services.assets.getTexture(AssetKey.HouseVietnam));
+    this.player = new Player(playerTextures);
+    this.house = new House(houseTexture);
     this.arrowPool = new PoolSystem(
-      () => new Arrow(arrowFrames),
+      () => new Arrow(projectileTexture),
       ARROW_CONFIG.poolSize,
       (arrow) => projectileLayer.addChild(arrow),
     );
     this.enemyPool = new PoolSystem(
-      () => new Enemy(enemyFrames),
+      () => new Enemy(enemyTextures),
       ENEMY_CONFIG.poolSize,
       (enemy) => entityLayer.addChild(enemy),
     );
@@ -84,13 +82,13 @@ export class PlayScene extends Scene {
     this.scoreSystem = new ScoreSystem(this.services.eventBus);
     this.spawnSystem = new SpawnSystem(this.enemyPool, () => this.services.app.screen);
 
-    this.player.activate({
-      x: width * WORLD_CONFIG.playerXRatio,
-      y: height * WORLD_CONFIG.playerYRatio,
-    });
     this.house.activate({
       x: width * WORLD_CONFIG.houseXRatio,
-      y: height * WORLD_CONFIG.houseYRatio,
+      y: roadY,
+    });
+    this.player.activate({
+      x: width * WORLD_CONFIG.houseXRatio,
+      y: roadY - WORLD_CONFIG.playerRoofOffset,
     });
     this.house.resetHealth();
 
@@ -118,6 +116,7 @@ export class PlayScene extends Scene {
     this.spawnSystem?.update(deltaSeconds, this.elapsedSeconds);
 
     this.updateEnemies(deltaSeconds);
+    this.updatePendingEnemyReleases(deltaSeconds);
     this.updateArrows(deltaSeconds);
     this.resolveCollisions();
     this.animationSystem?.update(deltaSeconds);
@@ -128,6 +127,7 @@ export class PlayScene extends Scene {
     this.unsubscribers.forEach((unsubscribe) => unsubscribe());
     this.unsubscribers.length = 0;
     this.animationSystem?.clear();
+    this.pendingEnemyReleases.length = 0;
     this.hud?.dispose();
     this.services.camera.setTarget(null);
   }
@@ -173,22 +173,19 @@ export class PlayScene extends Scene {
 
     const hits = this.collisionSystem.collectArrowEnemyHits(
       this.arrowPool.getItems(),
-      this.enemyPool.getItems(),
+      this.getProjectileTargetEnemies(),
     );
 
     hits.forEach(({ arrow, enemy }) => {
       const position = enemy.getPosition();
 
       this.arrowPool?.release(arrow);
-      this.enemyPool?.release(enemy);
-      this.scoreSystem?.addEnemyDefeat();
+      this.damageEnemy(enemy);
       this.animationSystem?.spawnHit(position);
-      this.animationSystem?.spawnEnemyDeath(position);
-      this.requestCameraShake();
     });
 
     const houseContacts = this.collisionSystem.collectHouseContacts(
-      this.enemyPool.getItems(),
+      this.getHouseContactEnemies(),
       this.house,
     );
 
@@ -220,6 +217,55 @@ export class PlayScene extends Scene {
     }
   }
 
+  private damageEnemy(enemy: Enemy): void {
+    if (this.enemyPool === null) {
+      return;
+    }
+
+    const damageResult = enemy.takeDamage(ARROW_CONFIG.damage);
+
+    if (damageResult !== EnemyDamageResult.Defeated) {
+      return;
+    }
+
+    this.scoreSystem?.addEnemyDefeat();
+    this.animationSystem?.spawnEnemyDeath(enemy.getPosition());
+    this.requestCameraShake();
+    this.pendingEnemyReleases.push({
+      enemy,
+      remainingSeconds: ENEMY_CONFIG.defeatReleaseDelaySeconds,
+    });
+  }
+
+  private updatePendingEnemyReleases(deltaSeconds: number): void {
+    if (this.enemyPool === null) {
+      return;
+    }
+
+    for (let index = this.pendingEnemyReleases.length - 1; index >= 0; index -= 1) {
+      const pendingRelease = this.pendingEnemyReleases[index];
+
+      if (pendingRelease === undefined) {
+        continue;
+      }
+
+      pendingRelease.remainingSeconds -= deltaSeconds;
+
+      if (pendingRelease.remainingSeconds <= 0) {
+        this.enemyPool.release(pendingRelease.enemy);
+        this.pendingEnemyReleases.splice(index, 1);
+      }
+    }
+  }
+
+  private getProjectileTargetEnemies(): readonly Enemy[] {
+    return this.enemyPool?.getItems().filter((enemy) => enemy.canReceiveProjectileHits) ?? [];
+  }
+
+  private getHouseContactEnemies(): readonly Enemy[] {
+    return this.enemyPool?.getItems().filter((enemy) => enemy.canReachHouse) ?? [];
+  }
+
   private emitHouseHealth(): void {
     if (this.house === null) {
       return;
@@ -238,35 +284,66 @@ export class PlayScene extends Scene {
     });
   }
 
-  private createBackground(width: number, height: number): Sprite {
-    const background = new Sprite(this.services.assets.getTexture(AssetKey.BackgroundVillage));
+  private async createBackground(width: number, height: number): Promise<Container> {
+    const texture = await this.services.assets.loadOptionalTexture(
+      ENVIRONMENT_TEXTURE_CONFIG.backgroundTexture,
+    );
 
-    background.width = width;
-    background.height = height;
+    if (texture === null) {
+      return new Container();
+    }
+
+    const background = new Sprite(texture);
+    const scale = Math.max(width / texture.width, height / texture.height);
+    background.anchor.set(0.5);
+    background.scale.set(scale);
+    background.position.set(width / 2, height / 2);
 
     return background;
   }
 
-  private createEnemyFrames(): EnemyFrameMap {
+  private async loadSelectedPlayerTextures(): Promise<PlayerTextures> {
+    const character = getCharacterConfig(this.services.gameSession.getSelectedCharacterId());
+    const [idle, throwTexture, ...walkTextures] = await this.services.assets.loadOptionalTextures([
+      character.idleTexture,
+      character.throwTexture,
+      ...character.walkTextures,
+    ]);
+
     return {
-      [EnemyKind.Big]: createSpriteFrames(
-        this.services.assets.getTexture(AssetKey.EnemyBig),
-        SPRITE_CONFIG.frameSize,
-        SPRITE_CONFIG.frameSize,
-        SPRITE_CONFIG.enemyFrameCount,
-      ),
-      [EnemyKind.Normal]: createSpriteFrames(
-        this.services.assets.getTexture(AssetKey.EnemyNormal),
-        SPRITE_CONFIG.frameSize,
-        SPRITE_CONFIG.frameSize,
-        SPRITE_CONFIG.enemyFrameCount,
-      ),
-      [EnemyKind.Spike]: createSpriteFrames(
-        this.services.assets.getTexture(AssetKey.EnemySpike),
-        SPRITE_CONFIG.frameSize,
-        SPRITE_CONFIG.frameSize,
-        SPRITE_CONFIG.enemyFrameCount,
-      ),
+      idle: idle ?? null,
+      throw: throwTexture ?? null,
+      walk: walkTextures.filter((texture): texture is Texture => texture !== null),
     };
+  }
+
+  private async loadEnemyTextures(): Promise<EnemyTextureMap> {
+    const entries = await Promise.all(
+      Object.values(EnemyKind).map(async (kind) => {
+        const config = ENEMY_TEXTURE_CONFIGS[kind];
+        const [idle, hit] = await this.services.assets.loadOptionalTextures([
+          config.idleTexture,
+          config.hitTexture,
+        ]);
+
+        return [
+          kind,
+          {
+            hit: this.requireEnemyTexture(hit, config.hitTexture),
+            idle: this.requireEnemyTexture(idle, config.idleTexture),
+          },
+        ] as const;
+      }),
+    );
+
+    return Object.fromEntries(entries) as EnemyTextureMap;
+  }
+
+  private requireEnemyTexture(texture: Texture | null | undefined, path: string): Texture {
+    if (texture === null || texture === undefined) {
+      throw new Error(`Required enemy texture failed to load: ${path}`);
+    }
+
+    return texture;
   }
 }

@@ -1,28 +1,33 @@
-import { Graphics, Sprite, Texture } from 'pixi.js';
+import { Sprite } from 'pixi.js';
+import type { Texture } from 'pixi.js';
 
 import { PLAYER_CONFIG } from '../utils/Constants';
-import { directionBetween } from '../utils/MathUtil';
+import { directionBetween, getContainScale } from '../utils/MathUtil';
 import type { Vector2 } from '../types/GameTypes';
 import { Entity } from './Entity';
 
+export interface PlayerTextures {
+  readonly idle: Texture | null;
+  readonly throw: Texture | null;
+  readonly walk: readonly Texture[];
+}
+
 /**
- * Player archer anchored near the village house and aimed by the mouse.
+ * Player character selected from approved external artwork.
  */
 export class Player extends Entity {
-  private readonly bow = new Graphics();
-  private readonly sprite: Sprite;
+  private readonly sprite: Sprite | null;
   private animationSeconds = 0;
   private aimDirection: Vector2 = { x: 1, y: 0 };
   private throwSeconds = 0;
 
-  public constructor(private readonly frames: readonly Texture[]) {
+  public constructor(private readonly textures: PlayerTextures) {
     super();
-    this.sprite = new Sprite(this.getFrame(0));
-    this.sprite.anchor.set(0.5, 1);
-    this.sprite.scale.set(1.32);
-    this.bow.position.set(0, -32);
-    this.drawBow();
-    this.addChild(this.bow, this.sprite);
+    this.sprite = this.createSprite(textures.idle);
+
+    if (this.sprite !== null) {
+      this.addChild(this.sprite);
+    }
   }
 
   /** Radius used when other systems need player spatial data. */
@@ -32,52 +37,74 @@ export class Player extends Entity {
 
   /** Updates the player aim toward the latest pointer position. */
   public aimAt(target: Vector2): void {
-    this.aimDirection = directionBetween(this.getAimOrigin(), target);
-    this.bow.rotation = Math.atan2(this.aimDirection.y, this.aimDirection.x);
+    this.aimDirection = directionBetween(this.getPosition(), target);
   }
 
-  /** Returns the arrow spawn point at the front of the bow. */
+  /** Returns the projectile spawn point in front of the selected character. */
   public getShootOrigin(): Vector2 {
-    const aimOrigin = this.getAimOrigin();
-
     return {
-      x: aimOrigin.x + this.aimDirection.x * PLAYER_CONFIG.shootOffset,
-      y: aimOrigin.y + this.aimDirection.y * PLAYER_CONFIG.shootOffset,
+      x: this.position.x + this.aimDirection.x * PLAYER_CONFIG.shootOffset,
+      y: this.position.y + this.aimDirection.y * PLAYER_CONFIG.shootOffset,
     };
   }
 
-  /** Plays a short throw pose after firing. */
+  /** Plays the approved throw texture when it is available. */
   public playThrow(): void {
     this.throwSeconds = 0.18;
   }
 
-  /** Updates player sprite animation timing. */
+  /** Updates character texture state without synthesizing new frames. */
   public update(deltaSeconds: number): void {
     this.animationSeconds += deltaSeconds;
     this.throwSeconds = Math.max(0, this.throwSeconds - deltaSeconds);
 
-    if (this.throwSeconds > 0) {
-      this.sprite.texture = this.getFrame(3);
+    if (this.sprite === null) {
       return;
     }
 
-    this.sprite.texture = this.getFrame(Math.floor(this.animationSeconds * 2) % 2);
+    this.sprite.texture = this.getCurrentTexture();
+    this.sprite.position.y =
+      Math.sin(this.animationSeconds * PLAYER_CONFIG.idleBobFrequency) *
+      PLAYER_CONFIG.idleBobAmplitude;
   }
 
-  private drawBow(): void {
-    this.bow
-      .roundRect(0, -5, PLAYER_CONFIG.aimLineLength, 10, 5)
-      .fill({ color: 0xf2c078 });
+  private getCurrentTexture(): Texture {
+    if (this.throwSeconds > 0 && this.textures.throw !== null) {
+      return this.textures.throw;
+    }
+
+    if (this.textures.walk.length > 0) {
+      const index = Math.floor(this.animationSeconds * 4) % this.textures.walk.length;
+      const texture = this.textures.walk[index];
+
+      if (texture !== undefined) {
+        return texture;
+      }
+    }
+
+    if (this.textures.idle === null) {
+      throw new Error('Player sprite should not exist without an idle texture.');
+    }
+
+    return this.textures.idle;
   }
 
-  private getAimOrigin(): Vector2 {
-    return {
-      x: this.position.x,
-      y: this.position.y - 34,
-    };
-  }
+  private createSprite(texture: Texture | null): Sprite | null {
+    if (texture === null) {
+      return null;
+    }
 
-  private getFrame(index: number): Texture {
-    return this.frames[index] ?? this.frames[0] ?? Texture.EMPTY;
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5, 1);
+    sprite.scale.set(
+      getContainScale(
+        texture.width,
+        texture.height,
+        PLAYER_CONFIG.spriteMaxWidth,
+        PLAYER_CONFIG.spriteMaxHeight,
+      ),
+    );
+
+    return sprite;
   }
 }

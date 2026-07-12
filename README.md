@@ -120,6 +120,10 @@ flowchart LR
 ```text
 src/
   assets/
+  data/
+    ApprovedAssetManifest.ts
+    CharacterData.ts
+    GameAssetData.ts
   core/
     AssetLoader.ts
     Camera.ts
@@ -137,8 +141,11 @@ src/
     GameOverScene.ts
     LoadingScene.ts
     MenuScene.ts
+    CharacterSelectionScene.ts
     PauseScene.ts
     PlayScene.ts
+  state/
+    GameState.ts
   systems/
     AnimationSystem.ts
     CollisionSystem.ts
@@ -151,6 +158,7 @@ src/
     SceneServices.ts
   ui/
     Button.ts
+    CharacterCard.ts
     HUD.ts
     HealthUI.ts
     ScoreUI.ts
@@ -172,7 +180,7 @@ src/
 - `PlayScene` composes systems but delegates rules to smaller classes to avoid a god object.
 - All tunable values live in `Constants.ts` so balancing does not require digging through logic.
 - Docker uses a multi-stage build: Node creates static assets and Nginx serves the optimized output.
-- Placeholder assets are generated into `src/assets` and loaded through `AssetLoader`, which keeps asset paths out of entity logic.
+- Approved art paths are configured in data files and loaded optionally through `AssetLoader`, so development can continue before final PNGs are present.
 
 ## Installation
 
@@ -208,13 +216,9 @@ The container serves the game through Nginx at [http://localhost:8080](http://lo
 
 ## Assets
 
-The current art set is generated from the included PowerShell script:
+Clean separated PNG assets should be placed under `public/assets`.
 
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/generate-assets.ps1
-```
-
-The generated assets follow the requested Vietnamese village direction: peanut-style player, alternate duck and cow players, normal/big/spiky enemies, flip-flop projectile, and a traditional house/base.
+The loader will not request or render a texture until its path is added to `APPROVED_TEXTURE_PATHS` in `src/data/ApprovedAssetManifest.ts`. This prevents rejected extraction output or missing files from being used accidentally.
 
 ## Deployment
 

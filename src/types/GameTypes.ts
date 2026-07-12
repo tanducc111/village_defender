@@ -6,6 +6,7 @@
 export enum SceneId {
   Loading = 'loading',
   Menu = 'menu',
+  CharacterSelection = 'character-selection',
   Play = 'play',
   Pause = 'pause',
   GameOver = 'game-over',
@@ -15,6 +16,7 @@ export enum SceneId {
 export enum GameState {
   Booting = 'booting',
   Menu = 'menu',
+  CharacterSelection = 'character-selection',
   Playing = 'playing',
   Paused = 'paused',
   GameOver = 'game-over',
@@ -35,6 +37,14 @@ export enum EnemyKind {
 
 /** Immutable two-dimensional coordinate used by input, movement, and effects. */
 export interface Vector2 {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Axis-aligned rectangle used by gameplay collision queries. */
+export interface CollisionRect {
+  readonly height: number;
+  readonly width: number;
   readonly x: number;
   readonly y: number;
 }

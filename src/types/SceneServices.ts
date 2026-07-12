@@ -3,6 +3,7 @@ import type { AssetLoader } from '../core/AssetLoader';
 import type { Camera } from '../core/Camera';
 import type { EventBus } from '../core/EventBus';
 import type { InputManager } from '../core/InputManager';
+import type { GameSessionState } from '../state/GameState';
 import type { GameState, SceneData, SceneId } from './GameTypes';
 
 /**
@@ -13,6 +14,7 @@ export interface SceneServices {
   readonly assets: AssetLoader;
   readonly camera: Camera;
   readonly eventBus: EventBus;
+  readonly gameSession: GameSessionState;
   readonly input: InputManager;
   readonly getGameState: () => GameState;
   readonly setGameState: (state: GameState) => void;
