@@ -18,6 +18,7 @@ import { ScoreSystem } from '../systems/ScoreSystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { EnemyKind, type Vector2 } from '../types/GameTypes';
 import { HUD } from '../ui/HUD';
+import { SCENE_TRANSITION } from '../ui/UITheme';
 import { ARROW_CONFIG, CAMERA_CONFIG, ENEMY_CONFIG, HOUSE_CONFIG, WORLD_CONFIG } from '../utils/Constants';
 import { Scene } from '../core/Scene';
 
@@ -65,6 +66,7 @@ export class PlayScene extends Scene {
     );
 
     this.elapsedSeconds = 0;
+    this.container.alpha = 0;
     this.gameOverTriggered = false;
     this.pendingEnemyReleases.length = 0;
     this.selectedWeapon = selectedWeapon;
@@ -126,6 +128,11 @@ export class PlayScene extends Scene {
 
   /** Updates all active gameplay systems using delta time. */
   public update(deltaSeconds: number): void {
+    this.container.alpha = Math.min(
+      1,
+      this.container.alpha + deltaSeconds / SCENE_TRANSITION.fadeInSeconds,
+    );
+
     if (this.gameOverTriggered) {
       return;
     }

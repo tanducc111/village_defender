@@ -7,8 +7,6 @@ import { getContainScale } from '../utils/MathUtil';
 import { SELECTION_LAYOUT, UI_THEME, WEAPON_CARD_LAYOUT, type StatBarVariant } from './UITheme';
 import { StatBar } from './StatBar';
 
-const SCALE_SPEED = 12;
-
 export interface WeaponCardOptions {
   readonly onSelect: () => void;
   readonly weapon: WeaponDefinition;
@@ -29,8 +27,11 @@ export class WeaponCard extends Container {
 
   private hovered = false;
   private selected = false;
+  private baseY: number | null = null;
+  private currentLift = 0;
+  private currentPreviewScale = 1;
   private sprite: Sprite | null = null;
-  private targetScale = 1;
+  private spriteBaseScale = 1;
 
   public constructor(private readonly options: WeaponCardOptions) {
     super();
@@ -68,6 +69,11 @@ export class WeaponCard extends Container {
     this.draw();
   }
 
+  /** Sets the resting y position used by hover and selected lift animation. */
+  public setBaseY(y: number): void {
+    this.baseY = y;
+  }
+
   /** Renders the approved weapon texture when it is available. */
   public setTexture(texture: Texture | null): void {
     this.sprite?.destroy();
@@ -79,25 +85,44 @@ export class WeaponCard extends Container {
 
     this.sprite = new Sprite(texture);
     this.sprite.anchor.set(0.5);
-    this.sprite.scale.set(
-      Math.min(
-        1,
-        getContainScale(texture.width, texture.height, WEAPON_CARD_LAYOUT.previewWidth, WEAPON_CARD_LAYOUT.previewHeight),
+    this.spriteBaseScale = Math.min(
+      1,
+      getContainScale(
+        texture.width,
+        texture.height,
+        WEAPON_CARD_LAYOUT.previewWidth,
+        WEAPON_CARD_LAYOUT.previewHeight,
       ),
     );
+    this.sprite.scale.set(this.spriteBaseScale);
     this.previewLayer.addChild(this.sprite);
   }
 
-  /** Updates hover and selection scale feedback. */
+  /** Updates hover and selection lift plus preview scale feedback. */
   public update(deltaSeconds: number): void {
-    const desiredScale = this.selected
-      ? SELECTION_LAYOUT.selectedScale
+    const desiredLift = this.selected
+      ? SELECTION_LAYOUT.selectedLift
       : this.hovered
-        ? SELECTION_LAYOUT.hoverScale
+        ? SELECTION_LAYOUT.hoverLift
+        : 0;
+    const desiredPreviewScale = this.selected
+      ? SELECTION_LAYOUT.selectedPreviewScale
+      : this.hovered
+        ? SELECTION_LAYOUT.hoverPreviewScale
         : 1;
+    const lerpAmount = Math.min(1, deltaSeconds * SELECTION_LAYOUT.animationSpeed);
 
-    this.targetScale += (desiredScale - this.targetScale) * Math.min(1, deltaSeconds * SCALE_SPEED);
-    this.scale.set(this.targetScale);
+    if (this.baseY === null) {
+      this.baseY = this.y;
+    }
+
+    this.currentLift += (desiredLift - this.currentLift) * lerpAmount;
+    this.currentPreviewScale += (desiredPreviewScale - this.currentPreviewScale) * lerpAmount;
+    this.y = this.baseY - this.currentLift;
+
+    if (this.sprite !== null) {
+      this.sprite.scale.set(Math.min(1, this.spriteBaseScale * this.currentPreviewScale));
+    }
   }
 
   /** Removes Pixi listeners before destroying child graphics and text. */
@@ -157,6 +182,9 @@ export class WeaponCard extends Container {
       ? UI_THEME.selectionCard.selectedStroke
       : this.options.weapon.accentColor;
     const borderAlpha = this.selected ? 1 : this.hovered ? 0.68 : 0.46;
+    const shadowAlpha = this.selected ? 0.5 : this.hovered ? 0.4 : 0.3;
+    const shadowOffsetX = this.selected ? 10 : this.hovered ? 8 : 7;
+    const shadowOffsetY = this.selected ? 14 : this.hovered ? 11 : 9;
 
     this.background.clear();
 
@@ -169,18 +197,18 @@ export class WeaponCard extends Container {
           WEAPON_CARD_LAYOUT.height + WEAPON_CARD_LAYOUT.glowPadding * 2,
           WEAPON_CARD_LAYOUT.radius + 8,
         )
-        .stroke({ color: UI_THEME.selectionCard.selectedGlow, alpha: 0.58, width: 10 });
+        .stroke({ color: UI_THEME.selectionCard.selectedGlow, alpha: 0.66, width: 12 });
     }
 
     this.background
       .roundRect(
-        -halfWidth + 7,
-        -halfHeight + 9,
+        -halfWidth + shadowOffsetX,
+        -halfHeight + shadowOffsetY,
         WEAPON_CARD_LAYOUT.width,
         WEAPON_CARD_LAYOUT.height,
         WEAPON_CARD_LAYOUT.radius,
       )
-      .fill({ color: UI_THEME.selectionCard.shadow, alpha: 0.3 })
+      .fill({ color: UI_THEME.selectionCard.shadow, alpha: shadowAlpha })
       .roundRect(
         -halfWidth,
         -halfHeight,
@@ -188,8 +216,11 @@ export class WeaponCard extends Container {
         WEAPON_CARD_LAYOUT.height,
         WEAPON_CARD_LAYOUT.radius,
       )
-      .fill({ color: UI_THEME.selectionCard.bodyFill, alpha: this.selected ? 0.72 : 0.58 })
-      .stroke({ color: borderColor, alpha: borderAlpha, width: this.selected ? 4 : 3 })
+      .fill({
+        color: UI_THEME.selectionCard.bodyFill,
+        alpha: this.selected ? 0.76 : this.hovered ? 0.64 : 0.58,
+      })
+      .stroke({ color: borderColor, alpha: borderAlpha, width: this.selected ? 5 : 3 })
       .roundRect(-halfWidth + 12, -halfHeight + 12, WEAPON_CARD_LAYOUT.width - 24, 88, 18)
       .fill({ color: this.options.weapon.accentColor, alpha: 0.08 });
   }

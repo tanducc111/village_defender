@@ -8,11 +8,14 @@ import {
 } from '../data/WeaponData';
 import { SceneId } from '../types/GameTypes';
 import { GameButton } from '../ui/GameButton';
-import { SELECTION_LAYOUT, TITLE_BANNER_LAYOUT, WEAPON_CARD_LAYOUT } from '../ui/UITheme';
+import {
+  SCENE_TRANSITION,
+  SELECTION_LAYOUT,
+  TITLE_BANNER_LAYOUT,
+  WEAPON_CARD_LAYOUT,
+} from '../ui/UITheme';
 import { WeaponCard } from '../ui/WeaponCard';
-import { UI_CONFIG } from '../utils/Constants';
-
-const FADE_SPEED = 4.8;
+import { TIME, UI_CONFIG } from '../utils/Constants';
 
 /**
  * Lets the player choose the weapon used by the next gameplay run.
@@ -20,18 +23,23 @@ const FADE_SPEED = 4.8;
 export class WeaponSelectionScene extends Scene {
   private readonly actionButtons: GameButton[] = [];
   private readonly cards: WeaponCard[] = [];
-  private elapsedSeconds = 0;
   private isNavigating = false;
+  private sceneChangeStarted = false;
   private selectedIndex = 0;
+  private transitionElapsedSeconds = 0;
+  private transitionTimeoutId: number | null = null;
+  private transitionTarget: SceneId | null = null;
   private uiLayer: Container | null = null;
 
   /** Builds the weapon selection layout and loads approved weapon textures. */
   public async enter(): Promise<void> {
     const { width, height } = this.services.app.screen;
     this.container.alpha = 0;
-    this.elapsedSeconds = 0;
     this.isNavigating = false;
+    this.sceneChangeStarted = false;
     this.selectedIndex = this.getInitialSelectionIndex();
+    this.transitionElapsedSeconds = 0;
+    this.transitionTarget = null;
     this.uiLayer = this.createUiLayer(width, height);
 
     this.container.addChild(await this.createBackground(width, height), this.uiLayer);
@@ -46,20 +54,18 @@ export class WeaponSelectionScene extends Scene {
 
   /** Updates card hover/selection animation and button feedback. */
   public update(deltaSeconds: number): void {
-    this.container.alpha = Math.min(1, this.container.alpha + deltaSeconds * FADE_SPEED);
-    this.elapsedSeconds += deltaSeconds;
-    this.cards.forEach((card, index) => {
-      card.position.y =
-        (SELECTION_LAYOUT.cardsTop + SELECTION_LAYOUT.cardsBottom) / 2 +
-        Math.sin(this.elapsedSeconds * 1.4 + index * 0.7) * 2;
-      card.update(deltaSeconds);
-    });
+    this.updateSceneFade(deltaSeconds);
+    this.cards.forEach((card) => card.update(deltaSeconds));
     this.actionButtons.forEach((button) => button.update(deltaSeconds));
   }
 
   /** Removes DOM listeners owned by the scene. */
   public override exit(): void {
     window.removeEventListener('keydown', this.handleKeyDown);
+    if (this.transitionTimeoutId !== null) {
+      window.clearTimeout(this.transitionTimeoutId);
+      this.transitionTimeoutId = null;
+    }
     this.uiLayer = null;
   }
 
@@ -136,14 +142,16 @@ export class WeaponSelectionScene extends Scene {
     this.addLeaves(banner, -bannerWidth / 2 + 22, -22, -1);
     this.addLeaves(banner, bannerWidth / 2 - 22, -22, 1);
 
-    const title = this.createOutlinedText('CHỌN VŨ KHÍ', 54, 0xffcf68, 0x301506, 7);
+    const titleShadow = this.createOutlinedText('CHỌN VŨ KHÍ', 54, 0x1e1109, 0x1e1109, 3);
+    const title = this.createOutlinedText('CHỌN VŨ KHÍ', 54, 0xffcf68, 0x301506, 8);
+    titleShadow.position.set(0, 6);
     title.position.set(0, 0);
-    banner.addChild(title);
+    banner.addChild(titleShadow, title);
 
     const subtitle = this.createOutlinedText(
       'Chọn vũ khí bạn muốn sử dụng',
       25,
-      0xffffff,
+      0xfff9e8,
       0x120b07,
       4,
     );
@@ -179,6 +187,7 @@ export class WeaponSelectionScene extends Scene {
       });
 
       card.position.set(startX + index * cardSpacing, cardCenterY);
+      card.setBaseY(cardCenterY);
       this.cards.push(card);
       this.getUiLayer().addChild(card);
     });
@@ -189,7 +198,7 @@ export class WeaponSelectionScene extends Scene {
       height: 54,
       label: '←  QUAY LẠI',
       onPress: () => {
-        void this.services.setScene(SceneId.CharacterSelection);
+        this.transitionToScene(SceneId.CharacterSelection);
       },
       variant: 'danger',
       width: 220,
@@ -268,7 +277,7 @@ export class WeaponSelectionScene extends Scene {
     }
 
     if (event.code === 'Escape' || event.code === 'Backspace') {
-      void this.services.setScene(SceneId.CharacterSelection);
+      this.transitionToScene(SceneId.CharacterSelection);
       return;
     }
 
@@ -277,14 +286,51 @@ export class WeaponSelectionScene extends Scene {
     }
   };
 
-  private async startGame(): Promise<void> {
+  private startGame(): void {
+    if (this.isNavigating) {
+      return;
+    }
+
+    this.services.gameSession.setSelectedWeaponId(this.getSelectedWeapon().id);
+    this.transitionToScene(SceneId.Play);
+  }
+
+  private transitionToScene(sceneId: SceneId): void {
     if (this.isNavigating) {
       return;
     }
 
     this.isNavigating = true;
-    this.services.gameSession.setSelectedWeaponId(this.getSelectedWeapon().id);
-    await this.services.setScene(SceneId.Play);
+    this.sceneChangeStarted = false;
+    this.transitionElapsedSeconds = 0;
+    this.transitionTarget = sceneId;
+    this.transitionTimeoutId = window.setTimeout(() => {
+      if (this.sceneChangeStarted) {
+        return;
+      }
+
+      this.sceneChangeStarted = true;
+      void this.services.setScene(sceneId);
+    }, SCENE_TRANSITION.fadeOutSeconds * TIME.millisecondsPerSecond);
+  }
+
+  private updateSceneFade(deltaSeconds: number): void {
+    if (this.transitionTarget !== null) {
+      this.transitionElapsedSeconds += deltaSeconds;
+      const progress = Math.min(
+        1,
+        this.transitionElapsedSeconds / SCENE_TRANSITION.fadeOutSeconds,
+      );
+
+      this.container.alpha = 1 - progress;
+
+      return;
+    }
+
+    this.container.alpha = Math.min(
+      1,
+      this.container.alpha + deltaSeconds / SCENE_TRANSITION.fadeInSeconds,
+    );
   }
 
   private createOutlinedText(

@@ -14,6 +14,8 @@ export interface GameButtonOptions {
 }
 
 const BUTTON_SCALE_SPEED = 16;
+const BUTTON_HOVER_SCALE = 1.03;
+const BUTTON_PRESSED_SCALE = 0.98;
 const PRESS_COOLDOWN_SECONDS = 0.18;
 
 /**
@@ -113,7 +115,7 @@ export class GameButton extends Container {
       return;
     }
 
-    this.targetScale = 1.04;
+    this.targetScale = BUTTON_HOVER_SCALE;
     this.setState('hover');
   };
 
@@ -131,7 +133,7 @@ export class GameButton extends Container {
       return;
     }
 
-    this.targetScale = 0.96;
+    this.targetScale = BUTTON_PRESSED_SCALE;
     this.setState('pressed');
   };
 
@@ -140,7 +142,7 @@ export class GameButton extends Container {
       return;
     }
 
-    this.targetScale = 1.04;
+    this.targetScale = BUTTON_HOVER_SCALE;
     this.setState('hover');
   };
 
@@ -167,11 +169,14 @@ export class GameButton extends Container {
     const radius = Math.min(18, this.heightValue / 2);
     const x = -this.widthValue / 2;
     const y = -this.heightValue / 2;
+    const shadowAlpha =
+      this.state === 'disabled' ? 0.14 : this.state === 'hover' ? 0.46 : 0.34;
+    const shadowOffsetY = this.state === 'hover' ? 9 : this.state === 'pressed' ? 4 : 7;
 
     this.shadow
       .clear()
-      .roundRect(x + 5, y + 7, this.widthValue, this.heightValue, radius)
-      .fill({ color: this.palette.shadow, alpha: this.state === 'disabled' ? 0.14 : 0.34 });
+      .roundRect(x + 5, y + shadowOffsetY, this.widthValue, this.heightValue, radius)
+      .fill({ color: this.palette.shadow, alpha: shadowAlpha });
 
     this.focusRing.clear();
 

@@ -6,11 +6,15 @@ import { ENVIRONMENT_TEXTURE_CONFIG } from '../data/GameAssetData';
 import { SceneId } from '../types/GameTypes';
 import { CharacterCard } from '../ui/CharacterCard';
 import { GameButton } from '../ui/GameButton';
-import { CHARACTER_CARD_LAYOUT, SELECTION_LAYOUT, TITLE_BANNER_LAYOUT } from '../ui/UITheme';
-import { UI_CONFIG } from '../utils/Constants';
+import {
+  CHARACTER_CARD_LAYOUT,
+  SCENE_TRANSITION,
+  SELECTION_LAYOUT,
+  TITLE_BANNER_LAYOUT,
+} from '../ui/UITheme';
+import { TIME, UI_CONFIG } from '../utils/Constants';
 
 const CARD_COLORS = [0xffc928, 0x1ea7e1, 0x77b82a] as const;
-const FADE_SPEED = 4.8;
 
 /**
  * Lets the player choose one approved character before entering gameplay.
@@ -22,7 +26,11 @@ export class CharacterSelectionScene extends Scene {
   private arrowRight: Container | null = null;
   private elapsedSeconds = 0;
   private isNavigating = false;
+  private sceneChangeStarted = false;
   private selectedIndex = 0;
+  private transitionElapsedSeconds = 0;
+  private transitionTimeoutId: number | null = null;
+  private transitionTarget: SceneId | null = null;
   private uiLayer: Container | null = null;
 
   /** Builds the character selection layout and loads optional character textures. */
@@ -30,7 +38,10 @@ export class CharacterSelectionScene extends Scene {
     const { width, height } = this.services.app.screen;
     this.container.alpha = 0;
     this.isNavigating = false;
+    this.sceneChangeStarted = false;
     this.selectedIndex = this.getInitialSelectionIndex();
+    this.transitionElapsedSeconds = 0;
+    this.transitionTarget = null;
     this.uiLayer = this.createUiLayer(width, height);
 
     this.container.addChild(await this.createBackground(width, height), this.uiLayer);
@@ -46,7 +57,7 @@ export class CharacterSelectionScene extends Scene {
 
   /** Updates card floating animation and button feedback. */
   public update(deltaSeconds: number): void {
-    this.container.alpha = Math.min(1, this.container.alpha + deltaSeconds * FADE_SPEED);
+    this.updateSceneFade(deltaSeconds);
     this.elapsedSeconds += deltaSeconds;
     this.cards.forEach((card, index) => card.update(deltaSeconds, this.elapsedSeconds, index));
     this.actionButtons.forEach((button) => button.update(deltaSeconds));
@@ -55,6 +66,10 @@ export class CharacterSelectionScene extends Scene {
   /** Removes DOM listeners owned by the scene. */
   public override exit(): void {
     window.removeEventListener('keydown', this.handleKeyDown);
+    if (this.transitionTimeoutId !== null) {
+      window.clearTimeout(this.transitionTimeoutId);
+      this.transitionTimeoutId = null;
+    }
     this.uiLayer = null;
   }
 
@@ -131,8 +146,8 @@ export class CharacterSelectionScene extends Scene {
     this.addLeaves(banner, -bannerWidth / 2 + 18, -22, -1);
     this.addLeaves(banner, bannerWidth / 2 - 18, -22, 1);
 
-    const titleShadow = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0x3b2414, 0x3b2414, 2);
-    const title = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0xffffff, 0x3b2414, 8);
+    const titleShadow = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0x2b170b, 0x2b170b, 3);
+    const title = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0xfff7df, 0x3b2414, 9);
 
     titleShadow.position.set(0, 6);
     title.position.set(0, 0);
@@ -141,7 +156,7 @@ export class CharacterSelectionScene extends Scene {
     const subtitle = this.createOutlinedText(
       'Chọn nhân vật của bạn để bắt đầu cuộc phiêu lưu!',
       26,
-      0xffffff,
+      0xfff9e8,
       0x2b1a0e,
       5,
     );
@@ -181,6 +196,7 @@ export class CharacterSelectionScene extends Scene {
       });
 
       card.position.set(startX + index * cardSpacing, cardCenterY);
+      card.setBaseY(cardCenterY);
       this.cards.push(card);
       this.getUiLayer().addChild(card);
     });
@@ -221,7 +237,7 @@ export class CharacterSelectionScene extends Scene {
       height: 54,
       label: '←  QUAY LẠI',
       onPress: () => {
-        void this.services.setScene(SceneId.Menu);
+        this.transitionToScene(SceneId.Menu);
       },
       variant: 'danger',
       width: 220,
@@ -313,7 +329,7 @@ export class CharacterSelectionScene extends Scene {
     }
 
     if (event.code === 'Escape' || event.code === 'Backspace') {
-      void this.services.setScene(SceneId.Menu);
+      this.transitionToScene(SceneId.Menu);
       return;
     }
 
@@ -322,14 +338,51 @@ export class CharacterSelectionScene extends Scene {
     }
   };
 
-  private async startGame(): Promise<void> {
+  private startGame(): void {
+    if (this.isNavigating) {
+      return;
+    }
+
+    this.services.gameSession.setSelectedCharacterId(this.getSelectedCharacter().id);
+    this.transitionToScene(SceneId.WeaponSelection);
+  }
+
+  private transitionToScene(sceneId: SceneId): void {
     if (this.isNavigating) {
       return;
     }
 
     this.isNavigating = true;
-    this.services.gameSession.setSelectedCharacterId(this.getSelectedCharacter().id);
-    await this.services.setScene(SceneId.WeaponSelection);
+    this.sceneChangeStarted = false;
+    this.transitionElapsedSeconds = 0;
+    this.transitionTarget = sceneId;
+    this.transitionTimeoutId = window.setTimeout(() => {
+      if (this.sceneChangeStarted) {
+        return;
+      }
+
+      this.sceneChangeStarted = true;
+      void this.services.setScene(sceneId);
+    }, SCENE_TRANSITION.fadeOutSeconds * TIME.millisecondsPerSecond);
+  }
+
+  private updateSceneFade(deltaSeconds: number): void {
+    if (this.transitionTarget !== null) {
+      this.transitionElapsedSeconds += deltaSeconds;
+      const progress = Math.min(
+        1,
+        this.transitionElapsedSeconds / SCENE_TRANSITION.fadeOutSeconds,
+      );
+
+      this.container.alpha = 1 - progress;
+
+      return;
+    }
+
+    this.container.alpha = Math.min(
+      1,
+      this.container.alpha + deltaSeconds / SCENE_TRANSITION.fadeInSeconds,
+    );
   }
 
   private createOutlinedText(

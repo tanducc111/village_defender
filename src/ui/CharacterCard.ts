@@ -7,8 +7,6 @@ import { getContainScale } from '../utils/MathUtil';
 import { CHARACTER_CARD_LAYOUT, SELECTION_LAYOUT, UI_THEME } from './UITheme';
 import { StatBar } from './StatBar';
 
-const SCALE_SPEED = 12;
-
 export interface CharacterCardOptions {
   readonly accentColor: number;
   readonly character: CharacterConfig;
@@ -22,6 +20,7 @@ export class CharacterCard extends Container {
   private readonly background = new Graphics();
   private readonly characterLayer = new Container();
   private readonly descriptionText: Text;
+  private readonly featureText: Text;
   private readonly namePlate = new Graphics();
   private readonly nameText: Text;
   private readonly pedestal = new Graphics();
@@ -30,13 +29,17 @@ export class CharacterCard extends Container {
 
   private hovered = false;
   private selected = false;
+  private baseY: number | null = null;
+  private currentLift = 0;
+  private currentPreviewScale = 1;
   private sprite: Sprite | null = null;
-  private targetScale = 1;
+  private spriteBaseScale = 1;
 
   public constructor(private readonly options: CharacterCardOptions) {
     super();
-    this.nameText = this.createText(options.character.name.toUpperCase(), 29, 0xffffff, '900', 260);
-    this.descriptionText = this.createText(options.character.description, 14, 0xffffff, '800', 292);
+    this.nameText = this.createText(options.character.name.toUpperCase(), 28, 0xffffff, '900', 260);
+    this.descriptionText = this.createText(options.character.description, 13, 0xffffff, '800', 292);
+    this.featureText = this.createText(options.character.feature, 11, 0xffffff, '800', 286);
     this.eventMode = 'static';
     this.cursor = 'pointer';
     this.hitArea = new Rectangle(
@@ -52,9 +55,10 @@ export class CharacterCard extends Container {
       this.nameText,
       this.pedestal,
       this.characterLayer,
+      this.descriptionText,
       this.statPanel,
       this.statRows,
-      this.descriptionText,
+      this.featureText,
     );
     this.layout();
     this.registerPointerEvents();
@@ -68,19 +72,36 @@ export class CharacterCard extends Container {
     this.draw();
   }
 
+  /** Sets the resting y position used by hover and selected lift animation. */
+  public setBaseY(y: number): void {
+    this.baseY = y;
+  }
+
   /** Updates card scale feedback and the character's subtle idle float. */
   public update(deltaSeconds: number, elapsedSeconds: number, index: number): void {
     const floatOffset = Math.sin(elapsedSeconds * 1.7 + index * 0.8) * 3;
-    const desiredScale = this.selected
-      ? SELECTION_LAYOUT.selectedScale
+    const desiredLift = this.selected
+      ? SELECTION_LAYOUT.selectedLift
       : this.hovered
-        ? SELECTION_LAYOUT.hoverScale
+        ? SELECTION_LAYOUT.hoverLift
+        : 0;
+    const desiredPreviewScale = this.selected
+      ? SELECTION_LAYOUT.selectedPreviewScale
+      : this.hovered
+        ? SELECTION_LAYOUT.hoverPreviewScale
         : 1;
+    const lerpAmount = Math.min(1, deltaSeconds * SELECTION_LAYOUT.animationSpeed);
 
-    this.targetScale += (desiredScale - this.targetScale) * Math.min(1, deltaSeconds * SCALE_SPEED);
-    this.scale.set(this.targetScale);
+    if (this.baseY === null) {
+      this.baseY = this.y;
+    }
+
+    this.currentLift += (desiredLift - this.currentLift) * lerpAmount;
+    this.currentPreviewScale += (desiredPreviewScale - this.currentPreviewScale) * lerpAmount;
+    this.y = this.baseY - this.currentLift;
 
     if (this.sprite !== null) {
+      this.sprite.scale.set(Math.min(1, this.spriteBaseScale * this.currentPreviewScale));
       this.sprite.position.y = this.toLocalY(CHARACTER_CARD_LAYOUT.spriteBaselineY) + floatOffset;
     }
   }
@@ -123,6 +144,12 @@ export class CharacterCard extends Container {
         CHARACTER_CARD_LAYOUT.descriptionTop + CHARACTER_CARD_LAYOUT.descriptionHeight / 2,
       ),
     );
+
+    this.featureText.anchor.set(0.5);
+    this.featureText.position.set(
+      0,
+      this.toLocalY(CHARACTER_CARD_LAYOUT.featureTop + CHARACTER_CARD_LAYOUT.featureHeight / 2),
+    );
   }
 
   private registerPointerEvents(): void {
@@ -149,6 +176,9 @@ export class CharacterCard extends Container {
       ? UI_THEME.selectionCard.selectedStroke
       : this.options.accentColor;
     const borderAlpha = this.selected ? 1 : this.hovered ? 0.62 : 0.34;
+    const shadowAlpha = this.selected ? 0.48 : this.hovered ? 0.38 : 0.3;
+    const shadowOffsetX = this.selected ? 10 : this.hovered ? 8 : 7;
+    const shadowOffsetY = this.selected ? 14 : this.hovered ? 11 : 9;
 
     this.background.clear();
 
@@ -161,18 +191,18 @@ export class CharacterCard extends Container {
           CHARACTER_CARD_LAYOUT.height + CHARACTER_CARD_LAYOUT.glowPadding * 2,
           CHARACTER_CARD_LAYOUT.radius + 8,
         )
-        .stroke({ color: UI_THEME.selectionCard.selectedGlow, alpha: 0.56, width: 10 });
+        .stroke({ color: UI_THEME.selectionCard.selectedGlow, alpha: 0.66, width: 12 });
     }
 
     this.background
       .roundRect(
-        -halfWidth + 7,
-        -halfHeight + 9,
+        -halfWidth + shadowOffsetX,
+        -halfHeight + shadowOffsetY,
         CHARACTER_CARD_LAYOUT.width,
         CHARACTER_CARD_LAYOUT.height,
         CHARACTER_CARD_LAYOUT.radius,
       )
-      .fill({ color: UI_THEME.selectionCard.shadow, alpha: 0.3 })
+      .fill({ color: UI_THEME.selectionCard.shadow, alpha: shadowAlpha })
       .roundRect(
         -halfWidth,
         -halfHeight,
@@ -180,8 +210,11 @@ export class CharacterCard extends Container {
         CHARACTER_CARD_LAYOUT.height,
         CHARACTER_CARD_LAYOUT.radius,
       )
-      .fill({ color: UI_THEME.selectionCard.bodyFillStrong, alpha: this.selected ? 0.68 : 0.56 })
-      .stroke({ color: borderColor, alpha: borderAlpha, width: this.selected ? 4 : 3 })
+      .fill({
+        color: UI_THEME.selectionCard.bodyFillStrong,
+        alpha: this.selected ? 0.74 : this.hovered ? 0.62 : 0.56,
+      })
+      .stroke({ color: borderColor, alpha: borderAlpha, width: this.selected ? 5 : 3 })
       .roundRect(
         -halfWidth + 12,
         -halfHeight + 12,
@@ -228,14 +261,14 @@ export class CharacterCard extends Container {
     const pedestalY = this.toLocalY(CHARACTER_CARD_LAYOUT.pedestalY);
 
     this.pedestal
-      .ellipse(0, pedestalY + 10, 118, 22)
+      .ellipse(0, pedestalY + 10, 124, 22)
       .fill({ color: 0x5a3219, alpha: 0.34 })
-      .ellipse(0, pedestalY, 112, 20)
+      .ellipse(0, pedestalY, 118, 20)
       .fill({ color: 0xa4662d })
       .stroke({ color: 0x4a2b16, width: 3 })
-      .rect(-110, pedestalY, 220, 18)
+      .rect(-116, pedestalY, 232, 18)
       .fill({ color: 0x7b4a24 })
-      .ellipse(0, pedestalY + 18, 112, 18)
+      .ellipse(0, pedestalY + 18, 118, 18)
       .fill({ color: 0x5d351a })
       .stroke({ color: 0x2f1a0d, width: 2 });
 
@@ -282,7 +315,7 @@ export class CharacterCard extends Container {
   }
 
   private fitSpriteIntoPreview(sprite: Sprite): void {
-    const scale = Math.min(
+    this.spriteBaseScale = Math.min(
       1,
       getContainScale(
         sprite.texture.width,
@@ -292,7 +325,7 @@ export class CharacterCard extends Container {
       ),
     );
 
-    sprite.scale.set(scale);
+    sprite.scale.set(this.spriteBaseScale);
     sprite.position.set(0, this.toLocalY(CHARACTER_CARD_LAYOUT.spriteBaselineY));
   }
 

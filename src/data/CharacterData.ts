@@ -10,6 +10,7 @@ export interface CharacterConfig {
   readonly id: CharacterId;
   readonly name: string;
   readonly description: string;
+  readonly feature: string;
   readonly hp: number;
   readonly attack: number;
   readonly speed: number;
@@ -24,6 +25,7 @@ export const CHARACTER_CONFIGS: readonly CharacterConfig[] = [
   {
     attack: 4,
     description: 'Đậu phộng dũng cảm,\nnhanh nhẹn và cân bằng.',
+    feature: 'Cân bằng,\nphù hợp mọi tình huống.',
     hp: 4,
     id: 'lac-lac',
     idleTexture: '/assets/characters/lac-lac/idle.png',
@@ -39,6 +41,7 @@ export const CHARACTER_CONFIGS: readonly CharacterConfig[] = [
   {
     attack: 4,
     description: 'Nhanh nhẹn, di chuyển linh hoạt\nvà tấn công nhanh.',
+    feature: 'Linh hoạt,\nra đòn liên tục.',
     hp: 3,
     id: 'vit-co-don',
     idleTexture: '/assets/characters/vit-co-don/idle.png',
@@ -54,6 +57,7 @@ export const CHARACTER_CONFIGS: readonly CharacterConfig[] = [
   {
     attack: 4,
     description: 'Trâu bò, sức mạnh vượt trội\nvà trụ vững trước mọi thử thách.',
+    feature: 'Bền bỉ,\nđứng vững khi quái đông.',
     hp: 5,
     id: 'bo-sua',
     idleTexture: '/assets/characters/bo-sua/idle.png',

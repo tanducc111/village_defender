@@ -42,8 +42,8 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     damage: 1,
     description: 'Dép nhựa huyền thoại,\nbay nhanh và dễ trúng.',
     display: {
-      impactScale: 1.15,
-      projectileScale: 1.35,
+      impactScale: 1.25,
+      projectileScale: 1.55,
       rotationSpeed: 14,
     },
     feature: 'Bay nhanh,\nphù hợp để tiêu diệt từng mục tiêu.',
@@ -66,8 +66,8 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     damage: 2,
     description: 'Điếu cày quen thuộc,\nđánh xa và sát thương cao.',
     display: {
-      impactScale: 1.15,
-      projectileScale: 1.25,
+      impactScale: 1.2,
+      projectileScale: 1.45,
       rotationSpeed: 9,
     },
     feature: 'Sát thương mạnh,\nném xa,\nđường bay ổn định.',
@@ -90,8 +90,8 @@ export const WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
     damage: 3,
     description: 'Chiếc ghế đỏ quen thuộc,\nnặng nhưng rất uy lực.',
     display: {
-      impactScale: 1.25,
-      projectileScale: 1.3,
+      impactScale: 1.35,
+      projectileScale: 1.6,
       rotationSpeed: 7,
     },
     feature: 'Sát thương cao,\nném mạnh,\nphù hợp khi quái đông.',
