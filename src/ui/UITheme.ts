@@ -14,6 +14,72 @@ export interface GameButtonPalette {
   readonly text: number;
 }
 
+export type StatBarVariant = 'green' | 'red' | 'yellow';
+
+export const SELECTION_LAYOUT = {
+  screenWidth: 1280,
+  screenHeight: 720,
+  titleY: 72,
+  subtitleY: 142,
+  cardsTop: 172,
+  cardsBottom: 622,
+  footerY: 684,
+  outerMarginX: 48,
+  cardGap: 36,
+  selectedScale: 1.02,
+  hoverScale: 1.012,
+} as const;
+
+export const CHARACTER_CARD_LAYOUT = {
+  width: 330,
+  height: 430,
+  radius: 24,
+  glowPadding: 10,
+  headerTop: 18,
+  headerHeight: 56,
+  headerWidth: 270,
+  previewTop: 82,
+  previewHeight: 210,
+  previewWidth: 260,
+  spriteBaselineY: 284,
+  pedestalY: 256,
+  statsTop: 300,
+  statsHeight: 74,
+  statsWidth: 280,
+  statRowHeight: 23,
+  descriptionTop: 382,
+  descriptionHeight: 40,
+  paddingX: 18,
+} as const;
+
+export const WEAPON_CARD_LAYOUT = {
+  width: 330,
+  height: 430,
+  radius: 22,
+  glowPadding: 10,
+  headerTop: 18,
+  headerHeight: 52,
+  headerWidth: 238,
+  previewTop: 76,
+  previewHeight: 150,
+  previewWidth: 272,
+  descriptionTop: 232,
+  descriptionHeight: 48,
+  statsTop: 286,
+  statsHeight: 100,
+  statsWidth: 268,
+  statsRowHeight: 24,
+  featureTop: 392,
+  featureHeight: 30,
+  paddingX: 18,
+} as const;
+
+export const TITLE_BANNER_LAYOUT = {
+  characterWidth: 720,
+  weaponWidth: 560,
+  height: 86,
+} as const;
+
 export const UI_THEME = {
   button: {
     danger: {
@@ -50,6 +116,19 @@ export const UI_THEME = {
     highlight: 0xd08a3d,
     shadow: 0x2c1a10,
   },
+  selectionCard: {
+    bodyFill: 0x132218,
+    bodyFillStrong: 0x172820,
+    shadow: 0x050908,
+    selectedGlow: 0xffe783,
+    selectedStroke: 0xffd85a,
+  },
+  statBar: {
+    background: 0x332b21,
+    green: 0x9fca2e,
+    red: 0xe04a36,
+    yellow: 0xd99a30,
+  } satisfies Record<StatBarVariant | 'background', number>,
   text: {
     dark: 0x3b2414,
     light: 0xfff7df,

@@ -24,11 +24,6 @@ export const ENEMY_TEXTURE_CONFIGS: Readonly<Record<EnemyKind, EnemyTextureConfi
   },
 };
 
-export const WEAPON_TEXTURE_CONFIG = {
-  impactTexture: '/assets/weapons/dep-nem-impact.png',
-  projectileTexture: '/assets/weapons/dep-nem.png',
-} as const;
-
 export const ENVIRONMENT_TEXTURE_CONFIG = {
   backgroundTexture: '/assets/environment/countryside-background.png',
   houseTexture: '/assets/environment/vietnamese-thatched-house.png',

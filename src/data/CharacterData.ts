@@ -2,6 +2,8 @@
  * Typed configuration for playable characters and their approved asset paths.
  */
 
+import type { WeaponId } from './WeaponData';
+
 export type CharacterId = 'lac-lac' | 'vit-co-don' | 'bo-sua';
 
 export interface CharacterConfig {
@@ -12,8 +14,8 @@ export interface CharacterConfig {
   readonly attack: number;
   readonly speed: number;
   readonly idleTexture: string;
+  readonly throwTextures: Readonly<Record<WeaponId, string>>;
   readonly walkTextures: readonly string[];
-  readonly throwTexture: string;
 }
 
 export const DEFAULT_CHARACTER_ID: CharacterId = 'lac-lac';
@@ -27,7 +29,11 @@ export const CHARACTER_CONFIGS: readonly CharacterConfig[] = [
     idleTexture: '/assets/characters/lac-lac/idle.png',
     name: 'Lạc Lạc',
     speed: 4,
-    throwTexture: '/assets/characters/lac-lac/throw.png',
+    throwTextures: {
+      bamboo: '/assets/characters/lac-lac/throw-bamboo.png',
+      'plastic-chair': '/assets/characters/lac-lac/throw-chair.png',
+      slipper: '/assets/characters/lac-lac/throw-slipper.png',
+    },
     walkTextures: [],
   },
   {
@@ -38,7 +44,11 @@ export const CHARACTER_CONFIGS: readonly CharacterConfig[] = [
     idleTexture: '/assets/characters/vit-co-don/idle.png',
     name: 'Vịt Cô Đơn',
     speed: 4,
-    throwTexture: '/assets/characters/vit-co-don/throw.png',
+    throwTextures: {
+      bamboo: '/assets/characters/vit-co-don/throw-bamboo.png',
+      'plastic-chair': '/assets/characters/vit-co-don/throw-chair.png',
+      slipper: '/assets/characters/vit-co-don/throw-slipper.png',
+    },
     walkTextures: [],
   },
   {
@@ -49,7 +59,11 @@ export const CHARACTER_CONFIGS: readonly CharacterConfig[] = [
     idleTexture: '/assets/characters/bo-sua/idle.png',
     name: 'Bò Sữa',
     speed: 2,
-    throwTexture: '/assets/characters/bo-sua/throw.png',
+    throwTextures: {
+      bamboo: '/assets/characters/bo-sua/throw-bamboo.png',
+      'plastic-chair': '/assets/characters/bo-sua/throw-chair.png',
+      slipper: '/assets/characters/bo-sua/throw-slipper.png',
+    },
     walkTextures: [],
   },
 ];

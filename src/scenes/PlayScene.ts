@@ -2,10 +2,10 @@ import { Container, Sprite } from 'pixi.js';
 import type { Texture } from 'pixi.js';
 
 import { getCharacterConfig } from '../data/CharacterData';
+import { getWeaponDefinition, type WeaponDefinition } from '../data/WeaponData';
 import {
   ENEMY_TEXTURE_CONFIGS,
   ENVIRONMENT_TEXTURE_CONFIG,
-  WEAPON_TEXTURE_CONFIG,
 } from '../data/GameAssetData';
 import { Arrow } from '../entities/Arrow';
 import { Enemy, EnemyDamageResult, type EnemyTextureMap } from '../entities/Enemy';
@@ -37,8 +37,10 @@ export class PlayScene extends Scene {
   private readonly pendingEnemyReleases: Array<{ enemy: Enemy; remainingSeconds: number }> = [];
   private player: Player | null = null;
   private scoreSystem: ScoreSystem | null = null;
+  private selectedWeapon: WeaponDefinition | null = null;
   private spawnSystem: SpawnSystem | null = null;
   private gameOverTriggered = false;
+  private shootCooldownSeconds = 0;
 
   /** Builds the gameplay world, entities, pools, and systems. */
   public async enter(): Promise<void> {
@@ -49,10 +51,14 @@ export class PlayScene extends Scene {
     const entityLayer = new Container();
     const projectileLayer = new Container();
     const effectLayer = new Container();
+    const selectedWeapon = getWeaponDefinition(this.services.gameSession.getSelectedWeaponId());
     const playerTextures = await this.loadSelectedPlayerTextures();
     const enemyTextures = await this.loadEnemyTextures();
     const projectileTexture = await this.services.assets.loadOptionalTexture(
-      WEAPON_TEXTURE_CONFIG.projectileTexture,
+      selectedWeapon.projectileTexture,
+    );
+    const impactTexture = await this.services.assets.loadOptionalTexture(
+      selectedWeapon.impactTexture,
     );
     const houseTexture = await this.services.assets.loadOptionalTexture(
       ENVIRONMENT_TEXTURE_CONFIG.houseTexture,
@@ -61,6 +67,8 @@ export class PlayScene extends Scene {
     this.elapsedSeconds = 0;
     this.gameOverTriggered = false;
     this.pendingEnemyReleases.length = 0;
+    this.selectedWeapon = selectedWeapon;
+    this.shootCooldownSeconds = 0;
 
     world.addChild(entityLayer, projectileLayer, effectLayer);
     this.container.addChild(background, world);
@@ -68,7 +76,16 @@ export class PlayScene extends Scene {
     this.player = new Player(playerTextures);
     this.house = new House(houseTexture);
     this.arrowPool = new PoolSystem(
-      () => new Arrow(projectileTexture),
+      () =>
+        new Arrow({
+          maxTravelDistance: selectedWeapon.range,
+          projectileScale: selectedWeapon.display.projectileScale,
+          rotationSpeed: selectedWeapon.display.rotationSpeed,
+          speed: selectedWeapon.speed,
+          spriteMaxHeight: ARROW_CONFIG.spriteMaxHeight,
+          spriteMaxWidth: ARROW_CONFIG.spriteMaxWidth,
+          texture: projectileTexture,
+        }),
       ARROW_CONFIG.poolSize,
       (arrow) => projectileLayer.addChild(arrow),
     );
@@ -77,7 +94,11 @@ export class PlayScene extends Scene {
       ENEMY_CONFIG.poolSize,
       (enemy) => entityLayer.addChild(enemy),
     );
-    this.animationSystem = new AnimationSystem(effectLayer);
+    this.animationSystem = new AnimationSystem(
+      effectLayer,
+      impactTexture,
+      selectedWeapon.display.impactScale,
+    );
     this.hud = new HUD(this.services.eventBus);
     this.scoreSystem = new ScoreSystem(this.services.eventBus);
     this.spawnSystem = new SpawnSystem(this.enemyPool, () => this.services.app.screen);
@@ -110,6 +131,7 @@ export class PlayScene extends Scene {
     }
 
     this.elapsedSeconds += deltaSeconds;
+    this.shootCooldownSeconds = Math.max(0, this.shootCooldownSeconds - deltaSeconds);
     this.player?.aimAt(this.services.input.getPointerPosition());
     this.player?.update(deltaSeconds);
     this.house?.update(deltaSeconds);
@@ -133,13 +155,18 @@ export class PlayScene extends Scene {
   }
 
   private shootArrow(target: Vector2): void {
-    if (this.arrowPool === null || this.player === null) {
+    if (this.arrowPool === null || this.player === null || this.selectedWeapon === null) {
+      return;
+    }
+
+    if (this.shootCooldownSeconds > 0) {
       return;
     }
 
     const arrow = this.arrowPool.acquire();
     arrow.fire(this.player.getShootOrigin(), target);
     this.player.playThrow();
+    this.shootCooldownSeconds = 1 / this.selectedWeapon.fireRate;
   }
 
   private updateEnemies(deltaSeconds: number): void {
@@ -155,7 +182,7 @@ export class PlayScene extends Scene {
     arrows.forEach((arrow) => {
       arrow.update(deltaSeconds);
 
-      if (arrow.isActive && arrow.isOutside(width, height)) {
+      if (arrow.isActive && (arrow.isOutside(width, height) || arrow.hasReachedMaxTravelDistance())) {
         this.arrowPool?.release(arrow);
       }
     });
@@ -222,7 +249,7 @@ export class PlayScene extends Scene {
       return;
     }
 
-    const damageResult = enemy.takeDamage(ARROW_CONFIG.damage);
+    const damageResult = enemy.takeDamage(this.selectedWeapon?.damage ?? ARROW_CONFIG.damage);
 
     if (damageResult !== EnemyDamageResult.Defeated) {
       return;
@@ -304,9 +331,10 @@ export class PlayScene extends Scene {
 
   private async loadSelectedPlayerTextures(): Promise<PlayerTextures> {
     const character = getCharacterConfig(this.services.gameSession.getSelectedCharacterId());
+    const weapon = getWeaponDefinition(this.services.gameSession.getSelectedWeaponId());
     const [idle, throwTexture, ...walkTextures] = await this.services.assets.loadOptionalTextures([
       character.idleTexture,
-      character.throwTexture,
+      character.throwTextures[weapon.id],
       ...character.walkTextures,
     ]);
 

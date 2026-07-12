@@ -7,6 +7,7 @@ import { MenuScene } from '../scenes/MenuScene';
 import { PauseScene } from '../scenes/PauseScene';
 import { PlayScene } from '../scenes/PlayScene';
 import { GameOverScene } from '../scenes/GameOverScene';
+import { WeaponSelectionScene } from '../scenes/WeaponSelectionScene';
 import { GameSessionState } from '../state/GameState';
 import type { SceneData } from '../types/GameTypes';
 import { GameState, SceneId } from '../types/GameTypes';
@@ -100,6 +101,7 @@ export class Game {
       SceneId.CharacterSelection,
       (services) => new CharacterSelectionScene(services),
     );
+    this.sceneFactories.set(SceneId.WeaponSelection, (services) => new WeaponSelectionScene(services));
     this.sceneFactories.set(SceneId.Play, (services) => new PlayScene(services));
     this.sceneFactories.set(SceneId.Pause, (services) => new PauseScene(services));
     this.sceneFactories.set(SceneId.GameOver, (services) => new GameOverScene(services));
@@ -224,6 +226,12 @@ export class Game {
 
     if (sceneId === SceneId.CharacterSelection) {
       this.gameState = GameState.CharacterSelection;
+      this.eventBus.emit('pauseChanged', { paused: false });
+      return;
+    }
+
+    if (sceneId === SceneId.WeaponSelection) {
+      this.gameState = GameState.WeaponSelection;
       this.eventBus.emit('pauseChanged', { paused: false });
       return;
     }

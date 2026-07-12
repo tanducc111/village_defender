@@ -1,8 +1,8 @@
-import { Graphics, type Container } from 'pixi.js';
+import { Graphics, Sprite, type Container, type Texture } from 'pixi.js';
 
 import type { Vector2 } from '../types/GameTypes';
 import { PARTICLE_CONFIG } from '../utils/Constants';
-import { randomRange } from '../utils/MathUtil';
+import { getContainScale, randomRange } from '../utils/MathUtil';
 
 interface Particle {
   readonly graphic: Graphics;
@@ -11,16 +11,29 @@ interface Particle {
   ageSeconds: number;
 }
 
+interface ImpactSprite {
+  readonly baseScale: number;
+  readonly lifetimeSeconds: number;
+  readonly sprite: Sprite;
+  ageSeconds: number;
+}
+
 /**
  * Handles lightweight hit particles and enemy death visual effects.
  */
 export class AnimationSystem {
+  private readonly impactSprites: ImpactSprite[] = [];
   private readonly particles: Particle[] = [];
 
-  public constructor(private readonly layer: Container) {}
+  public constructor(
+    private readonly layer: Container,
+    private readonly impactTexture: Texture | null = null,
+    private readonly impactScale = 1,
+  ) {}
 
   /** Spawns a compact burst used for direct arrow hits. */
   public spawnHit(position: Vector2): void {
+    this.spawnImpactSprite(position);
     this.spawnBurst(position, PARTICLE_CONFIG.hitCount, 0xffd166);
   }
 
@@ -31,6 +44,8 @@ export class AnimationSystem {
 
   /** Updates active particles and cleans up expired graphics. */
   public update(deltaSeconds: number): void {
+    this.updateImpactSprites(deltaSeconds);
+
     for (let index = this.particles.length - 1; index >= 0; index -= 1) {
       const particle = this.particles[index];
 
@@ -55,8 +70,57 @@ export class AnimationSystem {
 
   /** Destroys all active particle graphics. */
   public clear(): void {
+    this.impactSprites.forEach((impact) => impact.sprite.destroy());
+    this.impactSprites.length = 0;
     this.particles.forEach((particle) => particle.graphic.destroy());
     this.particles.length = 0;
+  }
+
+  private spawnImpactSprite(position: Vector2): void {
+    if (this.impactTexture === null) {
+      return;
+    }
+
+    const sprite = new Sprite(this.impactTexture);
+    sprite.anchor.set(0.5);
+    sprite.position.set(position.x, position.y);
+    const baseScale =
+      getContainScale(
+        this.impactTexture.width,
+        this.impactTexture.height,
+        PARTICLE_CONFIG.impactSpriteMaxWidth,
+        PARTICLE_CONFIG.impactSpriteMaxHeight,
+      ) * this.impactScale;
+
+    sprite.scale.set(baseScale);
+    this.layer.addChild(sprite);
+
+    this.impactSprites.push({
+      ageSeconds: 0,
+      baseScale,
+      lifetimeSeconds: PARTICLE_CONFIG.impactSpriteLifetimeSeconds,
+      sprite,
+    });
+  }
+
+  private updateImpactSprites(deltaSeconds: number): void {
+    for (let index = this.impactSprites.length - 1; index >= 0; index -= 1) {
+      const impact = this.impactSprites[index];
+
+      if (impact === undefined) {
+        continue;
+      }
+
+      impact.ageSeconds += deltaSeconds;
+      const progress = impact.ageSeconds / impact.lifetimeSeconds;
+      impact.sprite.alpha = Math.max(0, 1 - progress);
+      impact.sprite.scale.set(impact.baseScale * (1 + progress * 0.35));
+
+      if (impact.ageSeconds >= impact.lifetimeSeconds) {
+        impact.sprite.destroy();
+        this.impactSprites.splice(index, 1);
+      }
+    }
   }
 
   private spawnBurst(position: Vector2, count: number, color: number): void {

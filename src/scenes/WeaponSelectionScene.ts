@@ -1,34 +1,35 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
 
 import { Scene } from '../core/Scene';
-import { CHARACTER_CONFIGS, type CharacterConfig } from '../data/CharacterData';
 import { ENVIRONMENT_TEXTURE_CONFIG } from '../data/GameAssetData';
+import {
+  WEAPON_DEFINITIONS,
+  type WeaponDefinition,
+} from '../data/WeaponData';
 import { SceneId } from '../types/GameTypes';
-import { CharacterCard } from '../ui/CharacterCard';
 import { GameButton } from '../ui/GameButton';
-import { CHARACTER_CARD_LAYOUT, SELECTION_LAYOUT, TITLE_BANNER_LAYOUT } from '../ui/UITheme';
+import { SELECTION_LAYOUT, TITLE_BANNER_LAYOUT, WEAPON_CARD_LAYOUT } from '../ui/UITheme';
+import { WeaponCard } from '../ui/WeaponCard';
 import { UI_CONFIG } from '../utils/Constants';
 
-const CARD_COLORS = [0xffc928, 0x1ea7e1, 0x77b82a] as const;
 const FADE_SPEED = 4.8;
 
 /**
- * Lets the player choose one approved character before entering gameplay.
+ * Lets the player choose the weapon used by the next gameplay run.
  */
-export class CharacterSelectionScene extends Scene {
+export class WeaponSelectionScene extends Scene {
   private readonly actionButtons: GameButton[] = [];
-  private readonly cards: CharacterCard[] = [];
-  private arrowLeft: Container | null = null;
-  private arrowRight: Container | null = null;
+  private readonly cards: WeaponCard[] = [];
   private elapsedSeconds = 0;
   private isNavigating = false;
   private selectedIndex = 0;
   private uiLayer: Container | null = null;
 
-  /** Builds the character selection layout and loads optional character textures. */
+  /** Builds the weapon selection layout and loads approved weapon textures. */
   public async enter(): Promise<void> {
     const { width, height } = this.services.app.screen;
     this.container.alpha = 0;
+    this.elapsedSeconds = 0;
     this.isNavigating = false;
     this.selectedIndex = this.getInitialSelectionIndex();
     this.uiLayer = this.createUiLayer(width, height);
@@ -36,7 +37,6 @@ export class CharacterSelectionScene extends Scene {
     this.container.addChild(await this.createBackground(width, height), this.uiLayer);
     this.createTitle();
     this.createCards();
-    this.createSelectionArrows();
     this.createActions();
     this.updateSelection();
     this.registerKeyboardInput();
@@ -44,11 +44,16 @@ export class CharacterSelectionScene extends Scene {
     await this.loadCardTextures();
   }
 
-  /** Updates card floating animation and button feedback. */
+  /** Updates card hover/selection animation and button feedback. */
   public update(deltaSeconds: number): void {
     this.container.alpha = Math.min(1, this.container.alpha + deltaSeconds * FADE_SPEED);
     this.elapsedSeconds += deltaSeconds;
-    this.cards.forEach((card, index) => card.update(deltaSeconds, this.elapsedSeconds, index));
+    this.cards.forEach((card, index) => {
+      card.position.y =
+        (SELECTION_LAYOUT.cardsTop + SELECTION_LAYOUT.cardsBottom) / 2 +
+        Math.sin(this.elapsedSeconds * 1.4 + index * 0.7) * 2;
+      card.update(deltaSeconds);
+    });
     this.actionButtons.forEach((button) => button.update(deltaSeconds));
   }
 
@@ -76,7 +81,7 @@ export class CharacterSelectionScene extends Scene {
 
   private getUiLayer(): Container {
     if (this.uiLayer === null) {
-      throw new Error('Character selection UI layer was not initialized.');
+      throw new Error('Weapon selection UI layer was not initialized.');
     }
 
     return this.uiLayer;
@@ -97,15 +102,15 @@ export class CharacterSelectionScene extends Scene {
       background.position.set(width / 2, height / 2);
       layer.addChild(background);
     } else {
-      layer.addChild(new Graphics().rect(0, 0, width, height).fill({ color: 0x7ec8f0 }));
+      layer.addChild(new Graphics().rect(0, 0, width, height).fill({ color: 0x102018 }));
     }
 
     layer.addChild(
       new Graphics()
         .rect(0, 0, width, height)
-        .fill({ color: 0x0f1a12, alpha: 0.18 })
-        .rect(0, height * 0.72, width, height * 0.28)
-        .fill({ color: 0x2f1f12, alpha: 0.22 }),
+        .fill({ color: 0x02090f, alpha: 0.48 })
+        .rect(0, height * 0.7, width, height * 0.3)
+        .fill({ color: 0x1e1208, alpha: 0.28 }),
     );
 
     return layer;
@@ -113,37 +118,34 @@ export class CharacterSelectionScene extends Scene {
 
   private createTitle(): void {
     const banner = new Container();
-    const bannerWidth = TITLE_BANNER_LAYOUT.characterWidth;
+    const bannerWidth = TITLE_BANNER_LAYOUT.weaponWidth;
     const bannerHeight = TITLE_BANNER_LAYOUT.height;
 
     banner.position.set(SELECTION_LAYOUT.screenWidth / 2, SELECTION_LAYOUT.titleY);
     banner.addChild(
       new Graphics()
         .roundRect(-bannerWidth / 2 + 8, -bannerHeight / 2 + 10, bannerWidth, bannerHeight, 18)
-        .fill({ color: 0x2b170b, alpha: 0.32 })
+        .fill({ color: 0x120b07, alpha: 0.44 })
         .roundRect(-bannerWidth / 2, -bannerHeight / 2, bannerWidth, bannerHeight, 18)
-        .fill({ color: 0xa8642c })
-        .stroke({ color: 0x5c351b, width: 5 })
-        .roundRect(-bannerWidth / 2 + 18, -bannerHeight / 2 + 12, bannerWidth - 36, 14, 8)
-        .fill({ color: 0xd68b3c, alpha: 0.46 }),
+        .fill({ color: 0x4d2b18 })
+        .stroke({ color: 0x1e1109, width: 5 })
+        .roundRect(-bannerWidth / 2 + 18, -bannerHeight / 2 + 12, bannerWidth - 36, 12, 8)
+        .fill({ color: 0x89532b, alpha: 0.48 }),
     );
 
-    this.addLeaves(banner, -bannerWidth / 2 + 18, -22, -1);
-    this.addLeaves(banner, bannerWidth / 2 - 18, -22, 1);
+    this.addLeaves(banner, -bannerWidth / 2 + 22, -22, -1);
+    this.addLeaves(banner, bannerWidth / 2 - 22, -22, 1);
 
-    const titleShadow = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0x3b2414, 0x3b2414, 2);
-    const title = this.createOutlinedText('CHỌN NHÂN VẬT', 58, 0xffffff, 0x3b2414, 8);
-
-    titleShadow.position.set(0, 6);
+    const title = this.createOutlinedText('CHỌN VŨ KHÍ', 54, 0xffcf68, 0x301506, 7);
     title.position.set(0, 0);
-    banner.addChild(titleShadow, title);
+    banner.addChild(title);
 
     const subtitle = this.createOutlinedText(
-      'Chọn nhân vật của bạn để bắt đầu cuộc phiêu lưu!',
-      26,
+      'Chọn vũ khí bạn muốn sử dụng',
+      25,
       0xffffff,
-      0x2b1a0e,
-      5,
+      0x120b07,
+      4,
     );
     subtitle.position.set(SELECTION_LAYOUT.screenWidth / 2, SELECTION_LAYOUT.subtitleY);
 
@@ -151,33 +153,29 @@ export class CharacterSelectionScene extends Scene {
   }
 
   private addLeaves(parent: Container, x: number, y: number, direction: -1 | 1): void {
-    const colors = [0x3f8f2f, 0x5aa63b, 0x2f7626];
+    const colors = [0x355f28, 0x4d8c33, 0x244f20];
 
     for (let index = 0; index < 6; index += 1) {
       const leaf = new Graphics()
         .ellipse(0, 0, 8, 16)
         .fill({ color: colors[index % colors.length] ?? colors[0] })
-        .stroke({ color: 0x1f5b1d, alpha: 0.5, width: 1 });
+        .stroke({ color: 0x143116, alpha: 0.5, width: 1 });
 
-      leaf.position.set(
-        x + direction * (index < 3 ? 0 : 18),
-        y + (index % 3) * 14,
-      );
+      leaf.position.set(x + direction * (index < 3 ? 0 : 18), y + (index % 3) * 14);
       leaf.rotation = direction * (-0.55 + index * 0.18);
       parent.addChild(leaf);
     }
   }
 
   private createCards(): void {
-    const cardSpacing = CHARACTER_CARD_LAYOUT.width + SELECTION_LAYOUT.cardGap;
+    const cardSpacing = WEAPON_CARD_LAYOUT.width + SELECTION_LAYOUT.cardGap;
     const startX = SELECTION_LAYOUT.screenWidth / 2 - cardSpacing;
     const cardCenterY = (SELECTION_LAYOUT.cardsTop + SELECTION_LAYOUT.cardsBottom) / 2;
 
-    CHARACTER_CONFIGS.forEach((character, index) => {
-      const card = new CharacterCard({
-        accentColor: CARD_COLORS[index] ?? CARD_COLORS[0],
-        character,
+    WEAPON_DEFINITIONS.forEach((weapon, index) => {
+      const card = new WeaponCard({
         onSelect: () => this.selectIndex(index),
+        weapon,
       });
 
       card.position.set(startX + index * cardSpacing, cardCenterY);
@@ -186,42 +184,12 @@ export class CharacterSelectionScene extends Scene {
     });
   }
 
-  private createSelectionArrows(): void {
-    this.arrowLeft = this.createArrowButton(-1, () => this.selectIndex(this.selectedIndex - 1));
-    this.arrowRight = this.createArrowButton(1, () => this.selectIndex(this.selectedIndex + 1));
-    this.getUiLayer().addChild(this.arrowLeft, this.arrowRight);
-  }
-
-  private createArrowButton(direction: -1 | 1, onPress: () => void): Container {
-    const button = new Container();
-    const shape = new Graphics();
-
-    shape
-      .roundRect(-22, -32, 44, 64, 16)
-      .fill({ color: 0xffb12e })
-      .stroke({ color: 0xffffff, width: 4 })
-      .moveTo(direction * -8, -18)
-      .lineTo(direction * 10, 0)
-      .lineTo(direction * -8, 18)
-      .stroke({ color: 0xffffff, width: 8 });
-
-    button.addChild(
-      new Graphics().roundRect(-18, -28, 44, 64, 16).fill({ color: 0x3b2414, alpha: 0.24 }),
-      shape,
-    );
-    button.eventMode = 'static';
-    button.cursor = 'pointer';
-    button.on('pointertap', onPress);
-
-    return button;
-  }
-
   private createActions(): void {
     const backButton = new GameButton({
       height: 54,
       label: '←  QUAY LẠI',
       onPress: () => {
-        void this.services.setScene(SceneId.Menu);
+        void this.services.setScene(SceneId.CharacterSelection);
       },
       variant: 'danger',
       width: 220,
@@ -230,7 +198,7 @@ export class CharacterSelectionScene extends Scene {
 
     const startButton = new GameButton({
       height: 64,
-      label: 'CHỌN VŨ KHÍ',
+      label: 'BẮT ĐẦU',
       onPress: () => {
         void this.startGame();
       },
@@ -246,51 +214,38 @@ export class CharacterSelectionScene extends Scene {
 
   private async loadCardTextures(): Promise<void> {
     await Promise.all(
-      CHARACTER_CONFIGS.map(async (character, index) => {
-        const texture = await this.services.assets.loadOptionalTexture(character.idleTexture);
+      WEAPON_DEFINITIONS.map(async (weapon, index) => {
+        const texture = await this.services.assets.loadOptionalTexture(weapon.projectileTexture);
         this.cards[index]?.setTexture(texture);
       }),
     );
   }
 
   private selectIndex(index: number): void {
-    this.selectedIndex = (index + CHARACTER_CONFIGS.length) % CHARACTER_CONFIGS.length;
+    this.selectedIndex = (index + WEAPON_DEFINITIONS.length) % WEAPON_DEFINITIONS.length;
     this.updateSelection();
   }
 
   private updateSelection(): void {
-    const selectedCard = this.cards[this.selectedIndex];
-
     this.cards.forEach((card, index) => card.setSelected(index === this.selectedIndex));
-    this.services.gameSession.setSelectedCharacterId(this.getSelectedCharacter().id);
-
-    if (selectedCard !== undefined && this.arrowLeft !== null && this.arrowRight !== null) {
-      this.arrowLeft.position.set(
-        selectedCard.x - CHARACTER_CARD_LAYOUT.width / 2 - 42,
-        selectedCard.y - 18,
-      );
-      this.arrowRight.position.set(
-        selectedCard.x + CHARACTER_CARD_LAYOUT.width / 2 + 42,
-        selectedCard.y - 18,
-      );
-    }
+    this.services.gameSession.setSelectedWeaponId(this.getSelectedWeapon().id);
   }
 
   private getInitialSelectionIndex(): number {
-    const selectedCharacterId = this.services.gameSession.getSelectedCharacterId();
-    const index = CHARACTER_CONFIGS.findIndex((character) => character.id === selectedCharacterId);
+    const selectedWeaponId = this.services.gameSession.getSelectedWeaponId();
+    const index = WEAPON_DEFINITIONS.findIndex((weapon) => weapon.id === selectedWeaponId);
 
     return Math.max(index, 0);
   }
 
-  private getSelectedCharacter(): CharacterConfig {
-    const character = CHARACTER_CONFIGS[this.selectedIndex];
+  private getSelectedWeapon(): WeaponDefinition {
+    const weapon = WEAPON_DEFINITIONS[this.selectedIndex];
 
-    if (character === undefined) {
-      throw new Error('Selected character index is out of bounds.');
+    if (weapon === undefined) {
+      throw new Error('Selected weapon index is out of bounds.');
     }
 
-    return character;
+    return weapon;
   }
 
   private registerKeyboardInput(): void {
@@ -313,7 +268,7 @@ export class CharacterSelectionScene extends Scene {
     }
 
     if (event.code === 'Escape' || event.code === 'Backspace') {
-      void this.services.setScene(SceneId.Menu);
+      void this.services.setScene(SceneId.CharacterSelection);
       return;
     }
 
@@ -328,8 +283,8 @@ export class CharacterSelectionScene extends Scene {
     }
 
     this.isNavigating = true;
-    this.services.gameSession.setSelectedCharacterId(this.getSelectedCharacter().id);
-    await this.services.setScene(SceneId.WeaponSelection);
+    this.services.gameSession.setSelectedWeaponId(this.getSelectedWeapon().id);
+    await this.services.setScene(SceneId.Play);
   }
 
   private createOutlinedText(

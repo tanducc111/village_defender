@@ -166,6 +166,9 @@ export const SCORE_CONFIG = {
 export const PARTICLE_CONFIG = {
   deathCount: 12,
   hitCount: 8,
+  impactSpriteLifetimeSeconds: 0.18,
+  impactSpriteMaxHeight: 54,
+  impactSpriteMaxWidth: 64,
   lifetimeSeconds: 0.42,
   maxSpeed: 180,
   minSpeed: 70,
